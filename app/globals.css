@@ -1,0 +1,138 @@
+@import "tailwindcss";
+/* @import url("https://googleapis.com"); */
+
+/* ============================================================
+   ARQADEMY — Design tokens (Brand Guidelines v4.0)
+   ============================================================ */
+:root {
+  --navy: #0d1b3d;
+  --teal: #0a7a76;
+  --tan: #d8c3a5;
+  --blue: #b7d7e8;
+  --grid-teal: #05a9a9;
+
+  --canvas: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #fafbfd;
+  --surface-3: #f1f4f8;
+
+  --ink: #0d1b3d;
+  --ink-2: #4b5771;
+  --ink-3: #7c89a3;
+  --ink-4: #a3aec4;
+
+  --line: #e3e8f0;
+  --line-soft: #edf1f6;
+
+  --brand: #0a7a76;
+  --brand-ink: #08615e;
+  --brand-soft: rgba(10, 122, 118, 0.07);
+  --brand-soft-2: rgba(10, 122, 118, 0.13);
+
+  --accent-blue: #b7d7e8;
+  --accent-blue-soft: rgba(183, 215, 232, 0.3);
+  --accent-tan: #d8c3a5;
+  --accent-tan-soft: rgba(216, 195, 165, 0.28);
+
+  --ok: #1f8a5b;
+  --ok-soft: rgba(31, 138, 91, 0.1);
+  --warn: #a9750b;
+  --warn-soft: rgba(169, 117, 11, 0.11);
+  --danger: #b3261e;
+  --danger-soft: rgba(179, 38, 30, 0.09);
+
+  --rail: #0d1b3d;
+  --rail-2: #132449;
+  --rail-ink: #96a3c0;
+  --rail-ink-hi: #ffffff;
+  --rail-line: rgba(255, 255, 255, 0.08);
+
+  --grid-op: 0.055;
+  --glow-op: 0.1;
+
+  --shadow-sm: 0 1px 2px rgba(13, 27, 61, 0.05);
+  --shadow: 0 1px 2px rgba(13, 27, 61, 0.04), 0 10px 28px -16px rgba(13, 27, 61, 0.22);
+  --shadow-lg: 0 24px 64px -24px rgba(13, 27, 61, 0.32), 0 2px 6px rgba(13, 27, 61, 0.06);
+
+  --r-ctl: 8px;
+  --r-card: 12px;
+  --r-lg: 16px;
+
+  --font-heading: "Comfortaa", cursive;
+  --font-body: "Nunito", system-ui, -apple-system, sans-serif;
+}
+
+@theme inline {
+  --color-navy: var(--navy);
+  --color-teal: var(--teal);
+  --color-tan: var(--tan);
+  --color-blue: var(--blue);
+  --color-grid-teal: var(--grid-teal);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
+  --radius-ctl: var(--r-ctl);
+  --radius-card: var(--r-card);
+  --radius-lg: var(--r-lg);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow);
+  --shadow-lg: var(--shadow-lg);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.005em;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: none; padding: 0; }
+a { color: inherit; text-decoration: none; }
+::selection { background: var(--brand-soft-2); }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+
+.font-heading { font-family: var(--font-heading); }
+
+.bg-grid {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--grid-teal) 100%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--grid-teal) 100%, transparent) 1px, transparent 1px);
+  background-size: 42px 42px;
+  opacity: var(--grid-op);
+  -webkit-mask-image: radial-gradient(120% 90% at 78% 0%, #000 0%, rgba(0,0,0,.55) 45%, transparent 85%);
+  mask-image: radial-gradient(120% 90% at 78% 0%, #000 0%, rgba(0,0,0,.55) 45%, transparent 85%);
+}
+.bg-glow {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(760px 420px at 82% -8%, color-mix(in srgb, var(--grid-teal) 60%, transparent), transparent 70%),
+    radial-gradient(620px 380px at 8% 108%, color-mix(in srgb, var(--navy) 45%, transparent), transparent 72%);
+  opacity: var(--glow-op);
+}
