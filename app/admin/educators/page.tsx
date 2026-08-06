@@ -1,21 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { AdminShell } from "@/components/layout/AdminShell";
 import {
   listPendingEducators,
   listAllEducators,
   setEducatorApproval,
+  educatorStatusOf,
   ApiError,
   type AdminEducator,
 } from "@/lib/api";
-import { Loader2, Check, Ban, XCircle } from "lucide-react";
+import { Loader2, Check, Ban, XCircle, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+type Filter = "all" | "pending" | "approve" | "suspended" | "closed";
+
 export default function AdminEducatorsPage() {
-  const [pending, setPending] = useState<AdminEducator[]>([]);
   const [all, setAll] = useState<AdminEducator[]>([]);
-  const [tab, setTab] = useState<"pending" | "all">("pending");
+  const [pending, setPending] = useState<AdminEducator[]>([]);
+  const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -45,6 +49,31 @@ export default function AdminEducatorsPage() {
     load();
   }, [load]);
 
+  const counts = useMemo(() => {
+    const c = { all: all.length, pending: 0, approve: 0, suspended: 0, closed: 0 };
+    for (const e of all) {
+      const s = educatorStatusOf(e) as Filter;
+      if (s in c && s !== "all") c[s as keyof typeof c]++;
+    }
+    // prefer pending endpoint count if richer
+    if (pending.length > c.pending) c.pending = pending.length;
+    return c;
+  }, [all, pending]);
+
+  const rows = useMemo(() => {
+    if (filter === "all") return all;
+    if (filter === "pending") {
+      // merge pending list + filtered all
+      const ids = new Set(pending.map((e) => e.id));
+      const fromAll = all.filter((e) => educatorStatusOf(e) === "pending");
+      const extra = pending.filter((e) => !ids.has(e.id) === false);
+      const map = new Map<string, AdminEducator>();
+      [...fromAll, ...pending].forEach((e) => map.set(e.id, e));
+      return Array.from(map.values());
+    }
+    return all.filter((e) => educatorStatusOf(e) === filter);
+  }, [all, pending, filter]);
+
   async function act(
     id: string,
     action: "approve" | "suspend" | "close"
@@ -60,32 +89,37 @@ export default function AdminEducatorsPage() {
     }
   }
 
-  const rows = tab === "pending" ? pending : all;
-  
-
   return (
     <AdminShell
       title="Educators"
       subtitle="Staff room"
-      pendingCount={pending.length}
+      pendingCount={counts.pending}
       onLogout={() => {
         window.location.href = "/admin/login";
       }}
     >
-      <div className="flex gap-1 p-1 rounded-[9px] bg-[var(--surface-3)] w-fit mb-5">
-        {(["pending", "all"] as const).map((t) => (
+      <div className="flex flex-wrap gap-1 p-1 rounded-[9px] bg-[var(--surface-3)] w-fit mb-5">
+        {(
+          [
+            ["all", "All"],
+            ["pending", "Pending"],
+            ["approve", "Approved"],
+            ["suspended", "Suspended"],
+            ["closed", "Closed"],
+          ] as const
+        ).map(([key, label]) => (
           <button
-            key={t}
+            key={key}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => setFilter(key)}
             className={cn(
               "px-3.5 py-1.5 rounded-[7px] text-[12px] font-bold transition",
-              tab === t
+              filter === key
                 ? "bg-[var(--surface)] text-[var(--ink)] shadow-[var(--shadow-sm)]"
                 : "text-[var(--ink-3)] hover:text-[var(--ink)]"
             )}
           >
-            {t === "pending" ? `Pending (${pending.length})` : `All (${all.length})`}
+            {label} ({counts[key]})
           </button>
         ))}
       </div>
@@ -127,71 +161,84 @@ export default function AdminEducatorsPage() {
                     colSpan={4}
                     className="px-[18px] py-10 text-center text-[var(--ink-3)]"
                   >
-                    No educators in this list.
+                    No educators in this filter.
                   </td>
                 </tr>
               )}
-              {rows.map((e) => (
-                <tr
-                  key={e.id}
-                  className="border-b border-[var(--line-soft)] last:border-0 hover:bg-[var(--surface-2)]"
-                >
-                  <td className="px-[18px] py-3">
-                    <div className="font-bold text-[var(--ink)]">
-                      {e.firstName} {e.lastName}
-                    </div>
-                    <div className="text-[11px] text-[var(--ink-3)] mt-0.5">
-                      {e.email}
-                    </div>
-                  </td>
-                  <td className="px-[18px] py-3 font-semibold text-[var(--ink-2)]">
-                    {e.arqId}
-                  </td>
-                  <td className="px-[18px] py-3">
-                    <StatusChip status={e.approvalStatus ?? e.accountApproval ?? "pending"} />
-                  </td>
-                  <td className="px-[18px] py-3">
-                    <div className="flex justify-end gap-1.5">
-                      {e.accountApproval === "pending" && (
-                        <ActionBtn
-                          label="Approve"
-                          icon={Check}
-                          tone="ok"
-                          busy={busyId === e.id}
-                          onClick={() => act(e.id, "approve")}
-                        />
-                      )}
-                      {e.accountApproval === "approve" && (
-                        <ActionBtn
-                          label="Suspend"
-                          icon={Ban}
-                          tone="warn"
-                          busy={busyId === e.id}
-                          onClick={() => act(e.id, "suspend")}
-                        />
-                      )}
-                      {e.accountApproval !== "closed" && (
-                        <ActionBtn
-                          label="Close"
-                          icon={XCircle}
-                          tone="danger"
-                          busy={busyId === e.id}
-                          onClick={() => act(e.id, "close")}
-                        />
-                      )}
-                      {e.accountApproval === "suspended" && (
-                        <ActionBtn
-                          label="Approve"
-                          icon={Check}
-                          tone="ok"
-                          busy={busyId === e.id}
-                          onClick={() => act(e.id, "approve")}
-                        />
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {rows.map((e) => {
+                const status = educatorStatusOf(e);
+                return (
+                  <tr
+                    key={e.id}
+                    className="border-b border-[var(--line-soft)] last:border-0 hover:bg-[var(--surface-2)]"
+                  >
+                    <td className="px-[18px] py-3">
+                      <Link
+                        href={`/admin/educators/${e.id}`}
+                        className="font-bold text-[var(--ink)] hover:text-[var(--brand)] inline-flex items-center gap-1"
+                      >
+                        {e.firstName} {e.lastName}
+                        <ChevronRight className="w-3.5 h-3.5 opacity-50" />
+                      </Link>
+                      <div className="text-[11px] text-[var(--ink-3)] mt-0.5">
+                        {e.email}
+                      </div>
+                    </td>
+                    <td className="px-[18px] py-3 font-semibold text-[var(--ink-2)]">
+                      {e.arqId}
+                    </td>
+                    <td className="px-[18px] py-3">
+                      <StatusChip status={status} />
+                    </td>
+                    <td className="px-[18px] py-3">
+                      <div className="flex justify-end gap-1.5 flex-wrap">
+                        {status === "pending" && (
+                          <ActionBtn
+                            label="Approve"
+                            icon={Check}
+                            tone="ok"
+                            busy={busyId === e.id}
+                            onClick={() => act(e.id, "approve")}
+                          />
+                        )}
+                        {status === "approve" && (
+                          <ActionBtn
+                            label="Suspend"
+                            icon={Ban}
+                            tone="warn"
+                            busy={busyId === e.id}
+                            onClick={() => act(e.id, "suspend")}
+                          />
+                        )}
+                        {status === "suspended" && (
+                          <ActionBtn
+                            label="Approve"
+                            icon={Check}
+                            tone="ok"
+                            busy={busyId === e.id}
+                            onClick={() => act(e.id, "approve")}
+                          />
+                        )}
+                        {status !== "closed" && (
+                          <ActionBtn
+                            label="Close"
+                            icon={XCircle}
+                            tone="danger"
+                            busy={busyId === e.id}
+                            onClick={() => act(e.id, "close")}
+                          />
+                        )}
+                        <Link
+                          href={`/admin/educators/${e.id}`}
+                          className="inline-flex items-center h-7 px-2 rounded-[7px] text-[11px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)]"
+                        >
+                          Open
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

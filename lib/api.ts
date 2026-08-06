@@ -276,3 +276,71 @@ export async function setEducatorApproval(
 export async function getAdminDashboard() {
   return api("/api/admin/dashboard/summary", { skipAuthRedirect: true });
 }
+
+
+/* ---------- Admin educators detail / students ---------- */
+
+export function educatorStatusOf(e: {
+  approvalStatus?: string;
+  accountApproval?: string;
+}): string {
+  return e.approvalStatus ?? e.accountApproval ?? "pending";
+}
+
+/** Full educator profile + attached students (admin) */
+export async function getAdminEducator(educatorId: string) {
+  return api(`/api/admin/educators/${educatorId}`, {
+    skipAuthRedirect: true,
+  });
+}
+
+/** Admin full assessment report for any student */
+export async function getAdminStudentReport(studentId: string) {
+  return api(`/api/admin/students/${studentId}/report`, {
+    skipAuthRedirect: true,
+  });
+}
+
+/** Admin learning history for a student (if backend exposes it) */
+export async function getAdminStudentLearningHistory(studentId: string) {
+  return api(`/api/admin/students/${studentId}/learning-history`, {
+    skipAuthRedirect: true,
+  });
+}
+
+/* ---------- Educator students ---------- */
+
+export async function listEducatorStudents() {
+  return api("/api/educators/students", { skipAuthRedirect: true });
+}
+
+export async function getEducatorStudent(studentId: string) {
+  return api(`/api/educators/students/${studentId}`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export async function getEducatorStudentReport(studentId: string) {
+  return api(`/api/educators/students/${studentId}/report`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export async function getEducatorStudentLearningHistory(studentId: string) {
+  return api(`/api/educators/students/${studentId}/learning-history`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export async function enrollStudent(payload: {
+  email: string;
+  firstName: string;
+  lastName: string;
+  password?: string;
+  academicLevel?: string;
+}) {
+  return api("/api/educators/students", {
+    method: "POST",
+    body: payload,
+  });
+}

@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Comfortaa } from "next/font/google";
 import "./globals.css";
+
+// 1. Initialize Comfortaa and define its CSS variable name
+const comfortaa = Comfortaa({
+  variable: "--font-comfortaa",
+  subsets: ["latin"],
+  display: "swap", // Ensures fast loading without font layout shifts
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,13 +32,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // 2. Add the comfortaa.variable class here
+      className={`${comfortaa.variable} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      {/* ADDED suppressHydrationWarning HERE TO BYPASS GRAMMARLY INJECTIONS */}
       <body suppressHydrationWarning className="min-h-full flex flex-col">
         {children}
       </body>
     </html>
   );
 }
-
