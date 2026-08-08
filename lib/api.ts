@@ -96,15 +96,15 @@ export async function studentLogin(payload: StudentLoginPayload) {
 }
 
 export async function getStudentMe() {
-  return api("/api/students/me", { skipAuthRedirect: true });
+  return api("/api/students/me", { skipAuthRedirect: false });
 }
 
 export async function getStudentDashboard() {
-  return api("/api/students/me/dashboard", { skipAuthRedirect: true });
+  return api("/api/students/me/dashboard", { skipAuthRedirect: false });
 }
 
 export async function getCurrentSession() {
-  return api("/api/students/me/current-session", { skipAuthRedirect: true });
+  return api("/api/students/me/current-session", { skipAuthRedirect: false });
 }
 
 export async function completeSession(sessionId: string) {
@@ -174,7 +174,7 @@ export async function educatorRegister(payload: EducatorRegisterPayload) {
   return api<{ message: string; arqId: string }>("/api/users/register", {
     method: "POST",
     body: payload,
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
@@ -182,23 +182,23 @@ export async function educatorLogin(payload: EducatorLoginPayload) {
   return api("/api/users/login", {
     method: "POST",
     body: payload,
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
 export async function educatorLogout() {
   return api("/api/users/logout", {
     method: "POST",
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
 export async function getEducatorMe() {
-  return api<EducatorProfile>("/api/users/me", { skipAuthRedirect: true });
+  return api<EducatorProfile>("/api/users/me", { skipAuthRedirect: false });
 }
 
 export async function getEducatorDashboard() {
-  return api("/api/educators/dashboard/summary", { skipAuthRedirect: true });
+  return api("/api/educators/dashboard/summary", { skipAuthRedirect: false });
 }
 
 
@@ -253,13 +253,13 @@ export type AdminEducator = {
 
 export async function listPendingEducators() {
   return api<AdminEducator[]>("/api/admin/educators/pending", {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
 export async function listAllEducators() {
   return api<AdminEducator[]>("/api/admin/educators", {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
@@ -274,7 +274,7 @@ export async function setEducatorApproval(
 }
 
 export async function getAdminDashboard() {
-  return api("/api/admin/dashboard/summary", { skipAuthRedirect: true });
+  return api("/api/admin/dashboard/summary", { skipAuthRedirect: false });
 }
 
 
@@ -290,45 +290,45 @@ export function educatorStatusOf(e: {
 /** Full educator profile + attached students (admin) */
 export async function getAdminEducator(educatorId: string) {
   return api(`/api/admin/educators/${educatorId}`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
 /** Admin full assessment report for any student */
 export async function getAdminStudentReport(studentId: string) {
   return api(`/api/admin/students/${studentId}/report`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
 /** Admin learning history for a student (if backend exposes it) */
 export async function getAdminStudentLearningHistory(studentId: string) {
   return api(`/api/admin/students/${studentId}/learning-history`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
 /* ---------- Educator students ---------- */
 
 export async function listEducatorStudents() {
-  return api("/api/educators/students", { skipAuthRedirect: true });
+  return api("/api/educators/students", { skipAuthRedirect: false });
 }
 
 export async function getEducatorStudent(studentId: string) {
   return api(`/api/educators/students/${studentId}`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
 export async function getEducatorStudentReport(studentId: string) {
   return api(`/api/educators/students/${studentId}/report`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
 export async function getEducatorStudentLearningHistory(studentId: string) {
   return api(`/api/educators/students/${studentId}/learning-history`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
@@ -342,5 +342,160 @@ export async function enrollStudent(payload: {
   return api("/api/educators/students", {
     method: "POST",
     body: payload,
+  });
+}
+
+/* ---------- Admin payments ---------- */
+
+export async function listPendingPayments() {
+  return api("/api/admin/payments/pending", { skipAuthRedirect: true });
+}
+
+export async function listAllPayments() {
+  return api("/api/admin/payments", { skipAuthRedirect: true });
+}
+
+/** action: approve → success, reject → failed (adjust if backend uses different verbs) */
+export async function setPaymentStatus(
+  paymentId: string,
+  action: "approve" | "reject"
+) {
+  return api(`/api/admin/payments/${paymentId}/status`, {
+    method: "PATCH",
+    body: { action },
+  });
+}
+
+/* ---------- Admin curriculum ---------- */
+
+export async function listSubjects() {
+  return api("/api/admin/curriculum/subjects", { skipAuthRedirect: true });
+}
+
+export async function createSubject(body: {
+  title: string;
+  description?: string;
+}) {
+  return api("/api/admin/curriculum/subjects", { method: "POST", body });
+}
+
+export async function getSubject(id: string) {
+  return api(`/api/admin/curriculum/subjects/${id}`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export async function updateSubject(
+  id: string,
+  body: { title?: string; description?: string }
+) {
+  return api(`/api/admin/curriculum/subjects/${id}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export async function deleteSubject(id: string) {
+  return api(`/api/admin/curriculum/subjects/${id}`, { method: "DELETE" });
+}
+
+export async function listClasses(subjectId: string) {
+  return api(`/api/admin/curriculum/subjects/${subjectId}/classes`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export async function createClass(
+  subjectId: string,
+  body: { title: string; term?: string; isActive?: boolean }
+) {
+  return api(`/api/admin/curriculum/subjects/${subjectId}/classes`, {
+    method: "POST",
+    body,
+  });
+}
+
+export async function updateClass(
+  id: string,
+  body: { title?: string; term?: string; isActive?: boolean }
+) {
+  return api(`/api/admin/curriculum/classes/${id}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export async function deleteClass(id: string) {
+  return api(`/api/admin/curriculum/classes/${id}`, { method: "DELETE" });
+}
+
+export async function listTopics(classId: string) {
+  return api(`/api/admin/curriculum/classes/${classId}/topics`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export async function createTopic(
+  classId: string,
+  body: {
+    title: string;
+    description?: string;
+    sortOrder: number;
+    expectedDurationDays: number;
+  }
+) {
+  return api(`/api/admin/curriculum/classes/${classId}/topics`, {
+    method: "POST",
+    body,
+  });
+}
+
+export async function updateTopic(
+  id: string,
+  body: {
+    title?: string;
+    description?: string;
+    sortOrder?: number;
+    expectedDurationDays?: number;
+  }
+) {
+  return api(`/api/admin/curriculum/topics/${id}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export async function deleteTopic(id: string) {
+  return api(`/api/admin/curriculum/topics/${id}`, { method: "DELETE" });
+}
+
+export async function listResources(topicId: string) {
+  return api(`/api/admin/curriculum/topics/${topicId}/resources`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export async function listInteractiveElements(resourceId: string) {
+  return api(
+    `/api/admin/curriculum/resources/${resourceId}/interactive-elements`,
+    { skipAuthRedirect: true }
+  );
+}
+
+/* ---------- Educator learning plans & reports ---------- */
+
+export async function listEducatorLearningPlans() {
+  return api("/api/educators/learning-plans", { skipAuthRedirect: true });
+}
+
+export async function listLearningPlansForStudent(studentId: string) {
+  return api(`/api/educators/students/${studentId}/learning-plans`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export async function getLearningPlan(planId: string) {
+  return api(`/api/educators/learning-plans/${planId}`, {
+    skipAuthRedirect: true,
   });
 }

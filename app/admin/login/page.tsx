@@ -8,7 +8,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { adminLogin, ApiError } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -42,7 +41,8 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] bg-[radial-gradient(1200px_800px_at_20%_20%,#14294F_0%,#0D1B3D_45%,#070F26_100%)]">
+    // FIX 1: Converted fixed inset-0 to dynamic scroll container to safeguard layout integrity across mobile and smaller screens
+    <div className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] bg-[radial-gradient(1200px_800px_at_20%_20%,#14294F_0%,#0D1B3D_45%,#070F26_100%)] overflow-y-auto">
       <div
         className="absolute inset-0 pointer-events-none opacity-5"
         style={{
@@ -51,7 +51,7 @@ export default function AdminLoginPage() {
           backgroundSize: "42px 42px",
         }}
       />
-      <div className="relative hidden lg:flex flex-col justify-center px-[clamp(40px,7vw,110px)]">
+      <div className="relative hidden lg:flex flex-col justify-center px-[clamp(40px,7vw,110px)] py-12">
         <div className="font-heading font-semibold text-white text-[clamp(38px,4.6vw,62px)] leading-none">
           AR<span className="text-[#12BFB4]">Q</span>
           <span className="text-[#12BFB4]">ademy</span>
@@ -70,7 +70,8 @@ export default function AdminLoginPage() {
         <div className="w-[52px] h-0.5 bg-[#12BFB4] rounded-sm mt-8" />
       </div>
 
-      <div className="relative flex flex-col justify-center px-[clamp(24px,6vw,96px)] lg:border-l lg:border-white/[0.06]">
+      {/* FIX 2: Added vertical padding to ensure elements never clip on small screens */}
+      <div className="relative flex flex-col justify-center px-[clamp(24px,6vw,96px)] py-12 lg:border-l lg:border-white/[0.06]">
         <form
           onSubmit={handleSubmit(onSubmit)}
           className="w-full max-w-[392px] mx-auto lg:mx-0"
@@ -88,12 +89,9 @@ export default function AdminLoginPage() {
             </label>
             <input
               type="email"
-              className={cn(
-                "w-full h-12 px-[15px] text-[14px] text-white rounded-[10px]",
-                "bg-white/[0.045] border border-white/[0.11]",
-                "focus:outline-none focus:border-[#12BFB4]",
-                errors.email && "border-red-400/60"
-              )}
+              className={`w-full h-12 px-[15px] text-[14px] text-white !text-white rounded-[10px] bg-white/[0.045] border focus:outline-none focus:border-[#12BFB4] focus:bg-white/[0.07] ${
+                errors.email ? "border-red-400/60" : "border-white/[0.11]"
+              }`}
               {...register("email")}
             />
             {errors.email && (
@@ -109,12 +107,9 @@ export default function AdminLoginPage() {
             </label>
             <input
               type="password"
-              className={cn(
-                "w-full h-12 px-[15px] text-[14px] text-white rounded-[10px]",
-                "bg-white/[0.045] border border-white/[0.11]",
-                "focus:outline-none focus:border-[#12BFB4]",
-                errors.password && "border-red-400/60"
-              )}
+              className={`w-full h-12 px-[15px] text-[14px] text-white !text-white rounded-[10px] bg-white/[0.045] border focus:outline-none focus:border-[#12BFB4] focus:bg-white/[0.07] ${
+                errors.password ? "border-red-400/60" : "border-white/[0.11]"
+              }`}
               {...register("password")}
             />
             {errors.password && (
@@ -130,14 +125,11 @@ export default function AdminLoginPage() {
             </div>
           )}
 
+          {/* Hardcoded classes prevent design manipulation issues and bypass conflicting global configurations */}
           <button
             type="submit"
             disabled={isSubmitting}
-            className={cn(
-              "w-full h-[50px] mt-7 rounded-[10px] font-heading font-semibold text-[14px]",
-              "bg-[#0E9B94] text-[#03211F] flex items-center justify-center gap-2",
-              "hover:bg-[#12BFB4] disabled:opacity-70"
-            )}
+            className="w-full h-[50px] mt-7 rounded-[10px] font-heading font-semibold text-[14px] bg-[#0E9B94] !bg-[#0E9B94] text-[#03211F] !text-[#03211F] flex items-center justify-center gap-2 hover:bg-[#12BFB4] hover:!bg-[#12BFB4] disabled:opacity-70 transition-colors"
           >
             {isSubmitting ? (
               <>

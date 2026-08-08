@@ -19,12 +19,12 @@ export default function AdminEducatorDetailPage() {
   const params = useParams();
   const id = String(params.id || "");
 
-  const [profile, setProfile] = useState<unknown>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const [studentJson, setStudentJson] = useState<unknown>(null);
+  const [studentJson, setStudentJson] = useState<any>(null);
   const [studentLabel, setStudentLabel] = useState<string | null>(null);
   const [studentLoading, setStudentLoading] = useState(false);
 

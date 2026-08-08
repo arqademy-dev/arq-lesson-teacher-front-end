@@ -18,7 +18,7 @@ export default function EducatorStudentDetailPage() {
   const params = useParams();
   const id = String(params.id || "");
 
-  const [bundle, setBundle] = useState<unknown>(null);
+  const [bundle, setBundle] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("Educator");

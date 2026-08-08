@@ -8,7 +8,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { educatorRegister, ApiError } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 const schema = z.object({
   firstName: z.string().min(1, "Required"),
@@ -67,13 +66,17 @@ export default function EducatorRegisterPage() {
         <div className="grid grid-cols-2 gap-3 mt-[22px]">
           <Field label="First name" error={errors.firstName?.message}>
             <input
-              className={inputClass(!!errors.firstName)}
+              className={`w-full h-12 px-[15px] text-[14px] text-white !text-white rounded-[10px] bg-white/[0.045] border focus:outline-none focus:border-[#12BFB4] focus:bg-white/[0.07] ${
+                errors.firstName ? "border-red-400/60" : "border-white/[0.11]"
+              }`}
               {...register("firstName")}
             />
           </Field>
           <Field label="Last name" error={errors.lastName?.message}>
             <input
-              className={inputClass(!!errors.lastName)}
+              className={`w-full h-12 px-[15px] text-[14px] text-white !text-white rounded-[10px] bg-white/[0.045] border focus:outline-none focus:border-[#12BFB4] focus:bg-white/[0.07] ${
+                errors.lastName ? "border-red-400/60" : "border-white/[0.11]"
+              }`}
               {...register("lastName")}
             />
           </Field>
@@ -83,7 +86,9 @@ export default function EducatorRegisterPage() {
           <input
             type="email"
             autoComplete="email"
-            className={inputClass(!!errors.email)}
+            className={`w-full h-12 px-[15px] text-[14px] text-white !text-white rounded-[10px] bg-white/[0.045] border focus:outline-none focus:border-[#12BFB4] focus:bg-white/[0.07] ${
+              errors.email ? "border-red-400/60" : "border-white/[0.11]"
+            }`}
             {...register("email")}
           />
         </Field>
@@ -96,7 +101,9 @@ export default function EducatorRegisterPage() {
           <input
             type="password"
             autoComplete="new-password"
-            className={inputClass(!!errors.password)}
+            className={`w-full h-12 px-[15px] text-[14px] text-white !text-white rounded-[10px] bg-white/[0.045] border focus:outline-none focus:border-[#12BFB4] focus:bg-white/[0.07] ${
+              errors.password ? "border-red-400/60" : "border-white/[0.11]"
+            }`}
             {...register("password")}
           />
         </Field>
@@ -112,14 +119,11 @@ export default function EducatorRegisterPage() {
           </div>
         )}
 
+        {/* Button color design preservation overrides */}
         <button
           type="submit"
           disabled={isSubmitting}
-          className={cn(
-            "w-full h-[50px] mt-7 rounded-[10px] font-heading font-semibold text-[14px]",
-            "bg-[#0E9B94] text-[#03211F] flex items-center justify-center gap-2",
-            "hover:bg-[#12BFB4] disabled:opacity-70"
-          )}
+          className="w-full h-[50px] mt-7 rounded-[10px] font-heading font-semibold text-[14px] bg-[#0E9B94] !bg-[#0E9B94] text-[#03211F] !text-[#03211F] flex items-center justify-center gap-2 hover:bg-[#12BFB4] hover:!bg-[#12BFB4] disabled:opacity-70 transition-colors"
         >
           {isSubmitting ? (
             <>
@@ -157,7 +161,8 @@ function GateShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-[100] grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] bg-[radial-gradient(1200px_800px_at_20%_20%,#14294F_0%,#0D1B3D_45%,#070F26_100%)]">
+    // Fixed wrapper constraints converted to dynamic, scrollable page layout
+    <div className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] bg-[radial-gradient(1200px_800px_at_20%_20%,#14294F_0%,#0D1B3D_45%,#070F26_100%)] overflow-y-auto">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -167,7 +172,7 @@ function GateShell({
           opacity: 0.05,
         }}
       />
-      <div className="relative hidden lg:flex flex-col justify-center px-[clamp(40px,7vw,110px)]">
+      <div className="relative hidden lg:flex flex-col justify-center px-[clamp(40px,7vw,110px)] py-12">
         <div className="font-heading font-semibold text-white text-[clamp(38px,4.6vw,62px)] leading-none">
           AR<span className="text-[#12BFB4]">Q</span>
           <span className="text-[#12BFB4]">academy</span>
@@ -183,7 +188,7 @@ function GateShell({
         </p>
         <div className="w-[52px] h-0.5 bg-[#12BFB4] rounded-sm mt-8" />
       </div>
-      <div className="relative flex flex-col justify-center px-[clamp(24px,6vw,96px)] lg:border-l lg:border-white/[0.06]">
+      <div className="relative flex flex-col justify-center px-[clamp(24px,6vw,96px)] py-12 lg:border-l lg:border-white/[0.06]">
         {children}
       </div>
     </div>
@@ -211,14 +216,5 @@ function Field({
         <p className="mt-1.5 text-[11.5px] text-red-300/90">{error}</p>
       )}
     </div>
-  );
-}
-
-function inputClass(hasError: boolean) {
-  return cn(
-    "w-full h-12 px-[15px] text-[14px] text-white rounded-[10px]",
-    "bg-white/[0.045] border border-white/[0.11] placeholder:text-white/25",
-    "focus:outline-none focus:border-[#12BFB4] focus:bg-white/[0.07] focus:shadow-[0_0_0_3px_rgba(18,191,180,0.14)]",
-    hasError && "border-red-400/60"
   );
 }

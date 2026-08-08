@@ -177,7 +177,7 @@ export function AdminShell({
                   type="button"
                   onClick={onLogout}
                   title="Sign out"
-                  className="text-[var(--rail-ink)] hover:text-white p-1"
+                  className="text-(--rail-ink) hover:text-white p-1"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
