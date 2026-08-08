@@ -499,3 +499,41 @@ export async function getLearningPlan(planId: string) {
     skipAuthRedirect: true,
   });
 }
+
+
+/* ---------- Student payments ---------- */
+
+/* ---------- Student payments ---------- */
+
+/** Create invoice — price computed server-side from topic count */
+export async function initiateStudentPayment(learningPlanId: string) {
+  return api<{
+    message?: string;
+    payment?: {
+      id: string;
+      studentId?: string;
+      learningPlanId?: string;
+      pricingTierId?: string;
+      amountNaira?: number;
+      status?: string;
+      provider?: string | null;
+      providerReference?: string | null;
+      paidAt?: string | null;
+      createdAt?: string;
+    };
+    redirectUrl?: string | null;
+  }>("/api/students/payments/initiate", {
+    method: "POST",
+    body: { learningPlanId },
+    skipAuthRedirect: true,
+  });
+}
+
+/** History — try me/payments; if 404 we'll show initiate result only */
+export async function listStudentPayments() {
+  return api("/api/students/me/payments", { skipAuthRedirect: true });
+}
+
+export async function getStudentReport() {
+  return api("/api/students/me/report", { skipAuthRedirect: true });
+}

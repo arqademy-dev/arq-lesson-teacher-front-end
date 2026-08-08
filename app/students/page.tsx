@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getStudentDashboard, ApiError } from "@/lib/api";
+import {
+  getStudentDashboard,
+  getStudentMe,
+  ApiError,
+} from "@/lib/api";
 import type { StudentDashboardSummary } from "@/components/learning/types";
 import {
   BookOpen,
@@ -13,25 +17,49 @@ import {
   CreditCard,
   AlertTriangle,
   ArrowRight,
+  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+type StudentMe = {
+  id?: string;
+  userId?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  arqId?: string;
+  academicLevel?: string | null;
+  enrollmentDate?: string;
+  educatorId?: string;
+  role?: string;
+  [key: string]: unknown;
+};
+
 export default function StudentDashboardPage() {
+  const [me, setMe] = useState<StudentMe | null>(null);
   const [data, setData] = useState<StudentDashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getStudentDashboard()
-      .then((d) => setData(d as StudentDashboardSummary))
-      .catch((err) => {
+    (async () => {
+      try {
+        const [profile, dash] = await Promise.all([
+          getStudentMe().catch(() => null),
+          getStudentDashboard(),
+        ]);
+        if (profile) setMe(profile as StudentMe);
+        setData(dash as StudentDashboardSummary);
+      } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           setError("Not authenticated. Please log in again.");
           return;
         }
         setError(err instanceof Error ? err.message : "Failed to load");
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   const session = data?.currentSession;
@@ -39,6 +67,11 @@ export default function StudentDashboardPage() {
   const progress = data?.progress;
   const performance = data?.performance;
   const payments = data?.payments;
+
+  const fullName =
+    me && (me.firstName || me.lastName)
+      ? `${me.firstName ?? ""} ${me.lastName ?? ""}`.trim()
+      : null;
 
   return (
     <div className="relative min-h-screen">
@@ -68,10 +101,10 @@ export default function StudentDashboardPage() {
           Dashboard
         </p>
         <h1 className="font-heading text-[22px] text-[var(--ink)]">
-          Welcome back
+          {fullName ? `Welcome, ${me?.firstName?.trim()}` : "Welcome back"}
         </h1>
         <p className="mt-1.5 text-[13px] text-[var(--ink-3)]">
-          Pick up today&apos;s session, or review how you&apos;re doing.
+          Your profile, progress, and today&apos;s session.
         </p>
 
         {loading && (
@@ -95,24 +128,98 @@ export default function StudentDashboardPage() {
           </div>
         )}
 
-        {!loading && !error && data && (
+        {!loading && !error && (
           <>
-            {/* Current session card */}
+            {/* Student profile card */}
             <section className="mt-8 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
+              
+              {/* If no successful payment, primary CTA goes to payments */}
+              {/* {payments && !payments.hasSuccessfulPayment ? (
+                <Link
+                  href="/students/payments"
+                  className={cn(
+                    "mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
+                    "bg-[var(--danger)] text-white hover:opacity-90 mx-2 w-auto"
+                  )}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Unlock with payment
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              ) : (
+                <Link
+                  href="/students/session"
+                  className={cn(
+                    "mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
+                    "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)]"
+                  )}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  {session?.isOverdue ? "Continue catch-up session" : "Go to today's session"}
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              )} */}
+
+              <div className="px-5 py-4 border-b border-[var(--line-soft)] flex items-center gap-3">
+                <div className="w-11 h-11 rounded-[11px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)] flex-none">
+                  {fullName ? (
+                    <span className="font-heading font-semibold text-[14px]">
+                      {(me?.firstName?.[0] ?? "").toUpperCase()}
+                      {(me?.lastName?.[0] ?? "").toUpperCase()}
+                    </span>
+                  ) : (
+                    <User className="w-5 h-5" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)] truncate">
+                    {fullName || "Student"}
+                  </h2>
+                  <p className="text-[12px] text-[var(--ink-3)] font-semibold mt-0.5">
+                    {[me?.arqId, me?.academicLevel].filter(Boolean).join(" · ") ||
+                      "Learner profile"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-5 py-4 grid gap-3 sm:grid-cols-2 text-[12.5px]">
+                <InfoRow label="Email" value={me?.email} />
+                <InfoRow label="Arq ID" value={me?.arqId} />
+                <InfoRow label="Academic level" value={me?.academicLevel} />
+                <InfoRow
+                  label="Enrolled"
+                  value={
+                    me?.enrollmentDate
+                      ? String(me.enrollmentDate)
+                      : undefined
+                  }
+                />
+              </div>
+
+              {/* If profile shape is unexpected, still show raw for debugging */}
+              {me && !me.firstName && !me.email && (
+                <details className="px-5 pb-4">
+                  <summary className="text-[11px] font-bold text-[var(--ink-4)] cursor-pointer">
+                    Raw profile JSON
+                  </summary>
+                  <pre className="mt-2 text-[11px] text-[var(--ink-3)] overflow-auto max-h-40">
+                    {JSON.stringify(me, null, 2)}
+                  </pre>
+                </details>
+              )}
+            </section>
+
+
+            {/* Current session */}
+            <section className="mt-5 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
               <div className="px-5 py-4 border-b border-[var(--line-soft)] flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
                     Current session
                   </p>
-                  {topic ? (
-                    <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)] mt-1">
-                      {topic.title}
-                    </h2>
-                  ) : (
-                    <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)] mt-1">
-                      No active session
-                    </h2>
-                  )}
+                  <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)] mt-1">
+                    {topic?.title || "No active session"}
+                  </h2>
                 </div>
                 {session?.isOverdue && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[var(--warn-soft)] text-[var(--warn)]">
@@ -161,7 +268,7 @@ export default function StudentDashboardPage() {
               </div>
             </section>
 
-            {/* Stats row */}
+            {/* Stats */}
             <div className="mt-5 grid gap-4 sm:grid-cols-3">
               <StatCard
                 icon={TrendingUp}
@@ -201,9 +308,35 @@ export default function StudentDashboardPage() {
                 }
               />
             </div>
+
+            <div className="mt-5">
+              <Link
+                href="/students/report"
+                className="text-[12.5px] font-bold text-[var(--brand)] hover:underline"
+              >
+                View full assessment report →
+              </Link>
+            </div>
           </>
         )}
       </main>
+    </div>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
+  return (
+    <div className="flex justify-between gap-3 border-b border-[var(--line-soft)] pb-2 last:border-0">
+      <span className="text-[var(--ink-3)] font-semibold">{label}</span>
+      <span className="font-bold text-[var(--ink)] text-right truncate max-w-[60%]">
+        {value && String(value).trim() ? String(value) : "—"}
+      </span>
     </div>
   );
 }
