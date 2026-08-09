@@ -531,7 +531,7 @@ export async function initiateStudentPayment(learningPlanId: string) {
 
 /** History — try me/payments; if 404 we'll show initiate result only */
 export async function listStudentPayments() {
-  return api("/api/students/me/payments", { skipAuthRedirect: true });
+  return api("/api/students/payments/me", { skipAuthRedirect: true });
 }
 
 export async function getStudentReport() {
