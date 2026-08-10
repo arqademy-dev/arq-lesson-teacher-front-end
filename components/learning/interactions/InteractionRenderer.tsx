@@ -24,6 +24,10 @@ import { Loader2, Send, CheckCircle2, XCircle } from "lucide-react";
 type Props = {
   element: SafeInteractiveElement;
   result?: SubmissionResult;
+  /** Prior answer from server (refresh restore) */
+  initialAnswer?: Record<string, unknown> | null;
+  /** If require-correct is on and last attempt was wrong → keep retryable */
+  allowRetry?: boolean;
   submitting?: boolean;
   onSubmit: (payload: InteractionAnswer) => void;
 };
@@ -35,19 +39,30 @@ const SUPPORTED = new Set([
   "drag_and_drop",
   "image_sequencing",
   "multiple_choice",
+  "interactive_video",
 ]);
 
 export function InteractionRenderer({
   element,
   result,
+  initialAnswer,
+  allowRetry = false,
   submitting,
   onSubmit,
 }: Props) {
-  const [answer, setAnswer] = useState<InteractionAnswer | null>(null);
-  const disabled = !!result || !!submitting;
+  const [answer, setAnswer] = useState<InteractionAnswer | null>(
+    (initialAnswer as InteractionAnswer) ?? null
+  );  const disabled = !!result || !!submitting;
+  
+  const locked =
+    !!submitting ||
+    (result?.isCorrect === true) ||
+    (result != null && result.isCorrect === false && !allowRetry);
+  
   const type = element.interactionType;
   const cfg = element.configSchema || {};
   const canSubmit = !!answer && !result && !submitting && SUPPORTED.has(String(type));
+
 
   return (
     <div className="mt-6 pt-5 border-t border-[var(--line-soft)]">
@@ -102,9 +117,14 @@ export function InteractionRenderer({
         />
       )}
 
-      {type === "multiple_choice" && (
+      {(type === "multiple_choice" || type === "interactive_video") && (
         <MultipleChoice
-          config={cfg as MultipleChoiceConfig}
+          config={{
+            question:
+              (cfg as { question?: string; prompt_text?: string }).question ||
+              (cfg as { prompt_text?: string }).prompt_text,
+            options: (cfg as { options?: string[] }).options || [],
+          }}
           disabled={disabled}
           onReady={setAnswer}
         />
@@ -118,7 +138,17 @@ export function InteractionRenderer({
       )}
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
-        {!result && SUPPORTED.has(String(type)) && (
+        {result && (
+          <div className={cn(/* ok / danger styles */)}>
+            {result.isCorrect
+              ? `Correct · +${result.scoreAwarded} pts`
+              : allowRetry
+                ? `Not quite · try again`
+                : `Not quite · ${result.scoreAwarded} pts`}
+          </div>
+        )}
+        {(!result || (result && !result.isCorrect && allowRetry)) &&
+          SUPPORTED.has(String(type)) && (
           <button
             type="button"
             disabled={!canSubmit}

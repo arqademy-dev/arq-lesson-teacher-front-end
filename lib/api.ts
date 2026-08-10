@@ -537,3 +537,9 @@ export async function listStudentPayments() {
 export async function getStudentReport() {
   return api("/api/students/me/report", { skipAuthRedirect: true });
 }
+
+export async function getSessionSubmissions(sessionId: string) {
+  return api(`/api/students/me/sessions/${sessionId}/submissions`, {
+    skipAuthRedirect: true,
+  });
+}

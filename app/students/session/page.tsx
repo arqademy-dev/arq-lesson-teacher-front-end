@@ -13,6 +13,7 @@ import type {
   Resource,
   SubmissionResult,
   InteractionAnswer,
+  SessionSubmission,
 } from "@/components/learning/types";
 import { ResourceRenderer } from "@/components/learning/resources/ResourceRenderer";
 import { InteractionRenderer } from "@/components/learning/interactions/InteractionRenderer";
@@ -29,7 +30,11 @@ export default function StudentSessionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeResourceId, setActiveResourceId] = useState<string | null>(null);
+
   const [results, setResults] = useState<Record<string, SubmissionResult>>({});
+  const [priorAnswers, setPriorAnswers] = useState<
+    Record<string, Record<string, unknown>>
+  >({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [completed, setCompleted] = useState(false);
@@ -41,17 +46,35 @@ export default function StudentSessionPage() {
       .then((d) => {
         const session = d as CurrentSessionResponse;
         setData(session);
+
         const sorted = [...(session.resources || [])].sort(
           (a, b) => a.sortOrder - b.sortOrder
         );
         setActiveResourceId(sorted[0]?.id ?? null);
+
+        // Restore latest submission per element (refresh-safe)
+        const resMap: Record<string, SubmissionResult> = {};
+        const ansMap: Record<string, Record<string, unknown>> = {};
+        for (const s of (session.submissions ?? []) as SessionSubmission[]) {
+          resMap[s.interactiveElementId] = {
+            isCorrect: s.isCorrect,
+            scoreAwarded: s.scoreAwarded,
+          };
+          if (s.studentResponse) {
+            ansMap[s.interactiveElementId] = s.studentResponse;
+          }
+        }
+        setResults(resMap);
+        setPriorAnswers(ansMap);
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
           setError("Not authenticated. Please log in again.");
           return;
         }
-        setError(err instanceof Error ? err.message : "Failed to load session");
+        setError(
+          err instanceof Error ? err.message : "Failed to load session"
+        );
       })
       .finally(() => setLoading(false));
   }, []);
@@ -68,6 +91,29 @@ export default function StudentSessionPage() {
   const activeResource =
     resources.find((r) => r.id === activeResourceId) ?? resources[0] ?? null;
 
+  const allElementIds = useMemo(() => {
+    if (!data) return [] as string[];
+    return data.resources.flatMap((r) =>
+      (r.interactiveElements ?? []).map((el) => el.id)
+    );
+  }, [data]);
+
+  /** Server default is true — treat missing as true */
+  const requireCorrect = data?.requireCorrectAnswersToProgress !== false;
+
+  const canComplete = useMemo(() => {
+    if (!data) return false;
+    if (allElementIds.length === 0) return true;
+    if (requireCorrect) {
+      return allElementIds.every((id) => results[id]?.isCorrect === true);
+    }
+    return true;
+  }, [data, allElementIds, results, requireCorrect]);
+
+  const answeredCorrect = allElementIds.filter(
+    (id) => results[id]?.isCorrect === true
+  ).length;
+
   async function handleSubmit(
     elementId: string,
     payload: InteractionAnswer
@@ -78,9 +124,14 @@ export default function StudentSessionPage() {
       const result = (await submitInteraction({
         interactiveElementId: elementId,
         scheduledSessionId: data.session.id,
-        response: payload,
+        response: payload as Record<string, unknown>,
       })) as SubmissionResult;
+
       setResults((prev) => ({ ...prev, [elementId]: result }));
+      setPriorAnswers((prev) => ({
+        ...prev,
+        [elementId]: payload as Record<string, unknown>,
+      }));
     } catch (err) {
       alert(err instanceof Error ? err.message : "Submit failed");
     } finally {
@@ -89,13 +140,17 @@ export default function StudentSessionPage() {
   }
 
   async function handleComplete() {
-    if (!data) return;
+    if (!data || !canComplete) return;
     setCompleting(true);
     try {
       await completeSession(data.session.id);
       setCompleted(true);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not complete session");
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Could not complete session. Check that every answer is correct if required."
+      );
     } finally {
       setCompleting(false);
     }
@@ -120,6 +175,7 @@ export default function StudentSessionPage() {
             {error || "No active session."}
           </p>
           <button
+            type="button"
             onClick={load}
             className="text-[12.5px] font-bold text-[var(--brand)]"
           >
@@ -162,6 +218,8 @@ export default function StudentSessionPage() {
 
   const { session, topic, isOverdue } = data;
 
+  console.log(activeResource?.resourceType, activeResource?.interactiveElements);
+
   return (
     <Shell>
       <main className="relative z-10 max-w-4xl mx-auto px-6 py-8">
@@ -184,6 +242,11 @@ export default function StudentSessionPage() {
             )}
             <p className="mt-2 text-[11.5px] text-[var(--ink-4)] font-semibold">
               Scheduled · {session.scheduledDate}
+              {requireCorrect && allElementIds.length > 0 && (
+                <span className="ml-2">
+                  · Checks {answeredCorrect}/{allElementIds.length} correct
+                </span>
+              )}
             </p>
           </div>
           {isOverdue && (
@@ -205,10 +268,11 @@ export default function StudentSessionPage() {
             <div className="p-2">
               {resources.map((r, idx) => {
                 const active = r.id === activeResource?.id;
-                const doneCount = (r.interactiveElements || []).filter(
-                  (el) => results[el.id]
+                const els = r.interactiveElements || [];
+                const doneCount = els.filter(
+                  (el) => results[el.id]?.isCorrect === true
                 ).length;
-                const total = r.interactiveElements?.length ?? 0;
+                const total = els.length;
                 return (
                   <button
                     key={r.id}
@@ -226,7 +290,7 @@ export default function StudentSessionPage() {
                     </div>
                     <div className="text-[11px] mt-0.5 opacity-80 font-semibold">
                       {r.resourceType}
-                      {total > 0 && ` · ${doneCount}/${total} answered`}
+                      {total > 0 && ` · ${doneCount}/${total} correct`}
                     </div>
                   </button>
                 );
@@ -250,16 +314,48 @@ export default function StudentSessionPage() {
                 <div className="px-5 py-5">
                   <ResourceRenderer resource={activeResource} />
 
-                  {(activeResource.interactiveElements || []).map((el) => (
-                    <InteractionRenderer
-                      key={el.id}
-                      element={el}
-                      result={results[el.id]}
-                      submitting={submittingId === el.id}
-                      onSubmit={(payload) => handleSubmit(el.id, payload)}
-                    />
-                  ))}
+                  {/* {(activeResource.interactiveElements || []).map((el) => {
+                    const result = results[el.id];
+                    const allowRetry =
+                      requireCorrect &&
+                      result != null &&
+                      result.isCorrect === false;
 
+                    return (
+                      <InteractionRenderer
+                        key={el.id}
+                        element={el}
+                        result={result}
+                        initialAnswer={priorAnswers[el.id] ?? null}
+                        allowRetry={allowRetry}
+                        submitting={submittingId === el.id}
+                        onSubmit={(payload) => handleSubmit(el.id, payload)}
+                      />
+                    );
+                  })} */}
+                    {(activeResource.interactiveElements || []).map((el) => {
+                      const result = results[el.id];
+                      const allowRetry =
+                        requireCorrect && result != null && result.isCorrect === false;
+
+                      return (
+                        <div key={el.id} className="mt-2">
+                          {el.videoTimestampSeconds != null && (
+                            <p className="text-[11px] font-bold text-[var(--brand)] mb-1">
+                              Checkpoint @ {el.videoTimestampSeconds}s
+                            </p>
+                          )}
+                          <InteractionRenderer
+                            element={el}
+                            result={result}
+                            initialAnswer={priorAnswers[el.id] ?? null}
+                            allowRetry={allowRetry}
+                            submitting={submittingId === el.id}
+                            onSubmit={(payload) => handleSubmit(el.id, payload)}
+                          />
+                        </div>
+                      );
+                    })}
                   {(activeResource.interactiveElements || []).length === 0 && (
                     <p className="mt-4 text-[13px] text-[var(--ink-3)]">
                       No interactive checks on this part.
@@ -274,15 +370,17 @@ export default function StudentSessionPage() {
             )}
 
             {/* Complete session */}
-            <div className="pt-2 flex justify-end">
+            <div className="pt-2 flex flex-col items-end gap-2">
               <button
                 type="button"
                 onClick={handleComplete}
-                disabled={completing}
+                disabled={completing || !canComplete}
                 className={cn(
                   "inline-flex items-center gap-2 h-11 px-5 rounded-[10px] text-[13px] font-heading font-semibold",
-                  "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)]",
-                  "disabled:opacity-70 disabled:pointer-events-none"
+                  canComplete
+                    ? "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)]"
+                    : "bg-[var(--surface-3)] text-[var(--ink-4)] cursor-not-allowed",
+                  "disabled:opacity-70"
                 )}
               >
                 {completing ? (
@@ -297,6 +395,12 @@ export default function StudentSessionPage() {
                   </>
                 )}
               </button>
+              {!canComplete && requireCorrect && allElementIds.length > 0 && (
+                <p className="text-[12px] text-[var(--warn)] font-semibold text-right max-w-sm">
+                  Answer every check correctly before you can finish this
+                  session ({answeredCorrect}/{allElementIds.length}).
+                </p>
+              )}
             </div>
           </div>
         </div>

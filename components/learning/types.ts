@@ -154,12 +154,23 @@ export type ScheduledSession = {
   educatorNotes?: string | null;
 };
 
+export type SessionSubmission = {
+  interactiveElementId: string;
+  studentResponse: Record<string, unknown>;
+  isCorrect: boolean;
+  scoreAwarded: number;
+  attemptNumber?: number;
+  submittedAt?: string;
+};
+
 export type CurrentSessionResponse = {
   session: ScheduledSession;
   isOverdue: boolean;
   topic: Topic;
   learningPlanId: string;
+  requireCorrectAnswersToProgress?: boolean;
   resources: Resource[];
+  submissions?: SessionSubmission[];
 };
 
 export type SubmissionResult = {
