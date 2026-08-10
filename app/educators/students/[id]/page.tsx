@@ -12,7 +12,7 @@ import {
   educatorLogout,
   ApiError,
 } from "@/lib/api";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, UserPlus } from "lucide-react";
 
 export default function EducatorStudentDetailPage() {
   const params = useParams();
@@ -84,7 +84,15 @@ export default function EducatorStudentDetailPage() {
         <ArrowLeft className="w-4 h-4" />
         All students
       </Link>
-
+      <div className="flex justify-end mb-4">
+        <Link
+          href={`/educators/students/${id}/learning-plan`}
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[12.5px] font-bold bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)]"
+        >
+          <UserPlus className="w-4 h-4" />
+          Assign learning plan
+        </Link>
+      </div>
       <p className="text-[12.5px] text-[var(--ink-3)] mb-4">
         Temporary view — full JSON from profile, assessment report, and learning
         history. UI polish comes after we confirm shapes.

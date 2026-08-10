@@ -205,13 +205,6 @@ export async function getEducatorDashboard() {
 
 
 
-
-
-
-
-
-
-
 /* ---------- Admin ---------- */
 /* ---------- Admin ---------- */
 /* ---------- Admin ---------- */
@@ -308,17 +301,11 @@ export async function getAdminStudentLearningHistory(studentId: string) {
   });
 }
 
+
+
 /* ---------- Educator students ---------- */
-
-export async function listEducatorStudents() {
-  return api("/api/educators/students", { skipAuthRedirect: false });
-}
-
-export async function getEducatorStudent(studentId: string) {
-  return api(`/api/educators/students/${studentId}`, {
-    skipAuthRedirect: false,
-  });
-}
+/* ---------- Educator students ---------- */
+/* ---------- Educator students ---------- */
 
 export async function getEducatorStudentReport(studentId: string) {
   return api(`/api/educators/students/${studentId}/report`, {
@@ -329,19 +316,6 @@ export async function getEducatorStudentReport(studentId: string) {
 export async function getEducatorStudentLearningHistory(studentId: string) {
   return api(`/api/educators/students/${studentId}/learning-history`, {
     skipAuthRedirect: false,
-  });
-}
-
-export async function enrollStudent(payload: {
-  email: string;
-  firstName: string;
-  lastName: string;
-  password?: string;
-  academicLevel?: string;
-}) {
-  return api("/api/educators/students", {
-    method: "POST",
-    body: payload,
   });
 }
 
@@ -482,27 +456,8 @@ export async function listInteractiveElements(resourceId: string) {
   );
 }
 
-/* ---------- Educator learning plans & reports ---------- */
-
-export async function listEducatorLearningPlans() {
-  return api("/api/educators/learning-plans", { skipAuthRedirect: true });
-}
-
-export async function listLearningPlansForStudent(studentId: string) {
-  return api(`/api/educators/students/${studentId}/learning-plans`, {
-    skipAuthRedirect: true,
-  });
-}
-
-export async function getLearningPlan(planId: string) {
-  return api(`/api/educators/learning-plans/${planId}`, {
-    skipAuthRedirect: true,
-  });
-}
-
 
 /* ---------- Student payments ---------- */
-
 /* ---------- Student payments ---------- */
 
 /** Create invoice — price computed server-side from topic count */
@@ -538,8 +493,92 @@ export async function getStudentReport() {
   return api("/api/students/me/report", { skipAuthRedirect: true });
 }
 
-export async function getSessionSubmissions(sessionId: string) {
-  return api(`/api/students/me/sessions/${sessionId}/submissions`, {
+/* ---------- Educator: enroll + learning plans ---------- */
+
+export type EnrollStudentPayload = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  academicLevel?: string;
+  password?: string;
+};
+
+export async function listEducatorLearningPlans() {
+  return api("/api/educators/learning-plans", { skipAuthRedirect: true });
+}
+
+export async function enrollStudent(payload: EnrollStudentPayload) {
+  return api("/api/educators/students", {
+    method: "POST",
+    body: payload,
+    skipAuthRedirect: true,
+  });
+}
+
+export async function listEducatorStudents() {
+  return api("/api/educators/students", { skipAuthRedirect: true });
+}
+
+export async function getEducatorStudent(studentId: string) {
+  return api(`/api/educators/students/${studentId}`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export type CreateLearningPlanPayload = {
+  studentId: string;
+  sessionsPerWeek: number;
+  preferredDays: string[];
+  startDate: string; // YYYY-MM-DD
+  requireCorrectAnswersToProgress?: boolean;
+  topics: Array<{ topicId: string; customDurationDays?: number }>;
+};
+
+export async function createLearningPlan(payload: CreateLearningPlanPayload) {
+  return api("/api/educators/learning-plans", {
+    method: "POST",
+    body: payload,
+    skipAuthRedirect: true,
+  });
+}
+
+export async function getLearningPlan(planId: string) {
+  return api(`/api/educators/learning-plans/${planId}`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export async function listLearningPlansForStudent(studentId: string) {
+  return api(`/api/educators/learning-plans/student/${studentId}`, {
+    skipAuthRedirect: true,
+  });
+}
+
+/**
+ * Curriculum catalog for plan builder.
+ * Prefer educator read routes; fall back to admin paths if your API shares them.
+ */
+
+/* ---------- Curriculum catalog (read — admin paths) ---------- */
+
+export async function listCurriculumSubjects() {
+  return api("/api/admin/curriculum/subjects", { skipAuthRedirect: true });
+}
+
+export async function listCurriculumClasses(subjectId: string) {
+  return api(`/api/admin/curriculum/subjects/${subjectId}/classes`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export async function listCurriculumTopics(classId: string) {
+  return api(`/api/admin/curriculum/classes/${classId}/topics`, {
+    skipAuthRedirect: true,
+  });
+}
+
+export async function listCurriculumResources(topicId: string) {
+  return api(`/api/admin/curriculum/topics/${topicId}/resources`, {
     skipAuthRedirect: true,
   });
 }
