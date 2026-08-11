@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, ArrowLeft, Loader2 } from "lucide-react"; // Added ArrowLeft
 import { adminLogin, ApiError } from "@/lib/api";
 
 const schema = z.object({
@@ -54,7 +54,7 @@ export default function AdminLoginPage() {
       <div className="relative hidden lg:flex flex-col justify-center px-[clamp(40px,7vw,110px)] py-12">
         <div className="font-heading font-semibold text-white text-[clamp(38px,4.6vw,62px)] leading-none">
           AR<span className="text-[#12BFB4]">Q</span>
-          <span className="text-[#12BFB4]">ademy</span>
+          <span className="text-[#12BFB4]">academy</span>
         </div>
         <p className="mt-5 text-[11px] font-bold tracking-[0.34em] uppercase text-[#12BFB4]">
           Powering Next Minds
@@ -72,9 +72,19 @@ export default function AdminLoginPage() {
 
       {/* FIX 2: Added vertical padding to ensure elements never clip on small screens */}
       <div className="relative flex flex-col justify-center px-[clamp(24px,6vw,96px)] py-12 lg:border-l lg:border-white/[0.06]">
+        
+        {/* FIXED WHITE BACK BUTTON */}
+        <Link 
+          href="/" 
+          className="absolute top-8 left-[clamp(24px,6vw,96px)] flex items-center gap-2 text-[12px] font-medium text-white transition-colors duration-140 group"
+        >
+          <ArrowLeft className="w-4 h-4 transform group-hover:-translate-x-0.5 transition-transform duration-140" />
+          <span>Back to Home</span>
+        </Link>
+
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="w-full max-w-[392px] mx-auto lg:mx-0"
+          className="w-full max-w-[392px] mx-auto lg:mx-0 mt-8 lg:mt-0"
         >
           <h2 className="font-heading font-semibold text-[23px] text-white">
             Admin login
@@ -143,12 +153,6 @@ export default function AdminLoginPage() {
               </>
             )}
           </button>
-
-          <p className="mt-5 text-[12.5px] text-white/40">
-            <Link href="/" className="text-[#12BFB4] font-bold">
-              ← Back to landing
-            </Link>
-          </p>
         </form>
       </div>
     </div>
