@@ -334,7 +334,7 @@ export async function setPaymentStatus(
   paymentId: string,
   action: "approve" | "reject"
 ) {
-  return api(`/api/admin/payments/${paymentId}/status`, {
+  return api(`/api/admin/payments/${paymentId}/${action}`, {
     method: "PATCH",
     body: { action },
   });
