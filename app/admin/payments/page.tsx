@@ -8,39 +8,59 @@ import {
   setPaymentStatus,
   ApiError,
 } from "@/lib/api";
-import { Loader2, Check, X } from "lucide-react";
+import { Loader2, Check, X, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Filter = "all" | "pending" | "success" | "failed" | "refunded";
 
+type PaymentRow = {
+  id: string;
+  studentId?: string;
+  learningPlanId?: string;
+  pricingTierId?: string;
+  amountNaira?: number;
+  status?: string;
+  provider?: string | null;
+  providerReference?: string | null;
+  paidAt?: string | null;
+  createdAt?: string;
+};
+
+function formatWhen(iso?: string | null) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export default function AdminPaymentsPage() {
-  const [all, setAll] = useState<Record<string, unknown>[]>([]);
-  const [pending, setPending] = useState<Record<string, unknown>[]>([]);
-  const [filter, setFilter] = useState<Filter>("pending");
+  const [all, setAll] = useState<PaymentRow[]>([]);
+  const [pending, setPending] = useState<PaymentRow[]>([]);
+  const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [raw, setRaw] = useState<unknown>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const [p, a] = await Promise.all([
-        listPendingPayments().catch((e) => {
-          console.warn(e);
-          return [];
-        }),
-        listAllPayments().catch((e) => {
-          console.warn(e);
-          return [];
-        }),
+        listPendingPayments().catch(() => []),
+        listAllPayments().catch(() => []),
       ]);
-      const pendingList = Array.isArray(p) ? p : [];
-      const allList = Array.isArray(a) ? a : [];
-      setPending(pendingList as Record<string, unknown>[]);
-      setAll(allList as Record<string, unknown>[]);
-      setRaw({ pending: p, all: a });
+      const pendingList = (Array.isArray(p) ? p : []) as PaymentRow[];
+      const allList = (Array.isArray(a) ? a : []) as PaymentRow[];
+      setPending(pendingList);
+      setAll(allList);
+      // Prefer pending tab if there is work waiting
+      if (pendingList.length > 0) setFilter((f) => (f === "all" ? "pending" : f));
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -68,20 +88,33 @@ export default function AdminPaymentsPage() {
   }, [all, pending, filter]);
 
   const counts = useMemo(() => {
-    const c = {
+    return {
       all: all.length,
-      pending: pending.length || all.filter((p) => p.status === "pending").length,
+      pending:
+        pending.length ||
+        all.filter((p) => p.status === "pending").length,
       success: all.filter((p) => p.status === "success").length,
       failed: all.filter((p) => p.status === "failed").length,
       refunded: all.filter((p) => p.status === "refunded").length,
     };
-    return c;
   }, [all, pending]);
+
+  const revenue = useMemo(() => {
+    return all
+      .filter((p) => p.status === "success")
+      .reduce((sum, p) => sum + Number(p.amountNaira ?? 0), 0);
+  }, [all]);
 
   async function act(id: string, action: "approve" | "reject") {
     setBusyId(id);
+    setMessage(null);
     try {
       await setPaymentStatus(id, action);
+      setMessage(
+        action === "approve"
+          ? "Payment marked successful."
+          : "Payment rejected."
+      );
       await load();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Action failed");
@@ -98,11 +131,31 @@ export default function AdminPaymentsPage() {
         window.location.href = "/admin/login";
       }}
     >
+      {/* Summary strip */}
+      {!loading && !error && (
+        <div className="grid gap-3 sm:grid-cols-3 mb-5 max-w-2xl">
+          <SummaryCard
+            label="Revenue (success)"
+            value={`₦${revenue.toLocaleString()}`}
+          />
+          <SummaryCard
+            label="Successful"
+            value={String(counts.success)}
+            tone="ok"
+          />
+          <SummaryCard
+            label="Pending review"
+            value={String(counts.pending)}
+            tone={counts.pending > 0 ? "warn" : "muted"}
+          />
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-1 p-1 rounded-[9px] bg-[var(--surface-3)] w-fit mb-5">
         {(
           [
-            ["pending", "Pending"],
             ["all", "All"],
+            ["pending", "Pending"],
             ["success", "Success"],
             ["failed", "Failed"],
             ["refunded", "Refunded"],
@@ -123,6 +176,12 @@ export default function AdminPaymentsPage() {
           </button>
         ))}
       </div>
+
+      {message && (
+        <p className="mb-3 text-[12.5px] font-semibold text-[var(--ok)]">
+          {message}
+        </p>
+      )}
 
       {loading && (
         <div className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
@@ -149,6 +208,9 @@ export default function AdminPaymentsPage() {
                   Amount
                 </th>
                 <th className="text-left px-4 py-2.5 text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
+                  Provider
+                </th>
+                <th className="text-left px-4 py-2.5 text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
                   Status
                 </th>
                 <th className="text-right px-4 py-2.5 text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
@@ -160,9 +222,10 @@ export default function AdminPaymentsPage() {
               {rows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={4}
-                    className="px-4 py-10 text-center text-[var(--ink-3)]"
+                    colSpan={5}
+                    className="px-4 py-12 text-center text-[var(--ink-3)]"
                   >
+                    <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     No payments in this filter.
                   </td>
                 </tr>
@@ -175,25 +238,43 @@ export default function AdminPaymentsPage() {
                     key={id}
                     className="border-b border-[var(--line-soft)] last:border-0 hover:bg-[var(--surface-2)]"
                   >
-                    <td className="px-4 py-3">
-                      <div className="font-bold text-[var(--ink)] text-[12px]">
+                    <td className="px-4 py-3.5">
+                      <div className="font-bold text-[var(--ink)] text-[12.5px] font-mono">
                         {id.slice(0, 8)}…
                       </div>
-                      <div className="text-[11px] text-[var(--ink-3)] mt-0.5">
-                        student {String(p.studentId ?? "—").slice(0, 8)} · plan{" "}
-                        {String(p.learningPlanId ?? "—").slice(0, 8)}
+                      <div className="text-[11px] text-[var(--ink-3)] mt-1 space-y-0.5">
+                        <div>
+                          Student · {String(p.studentId ?? "—").slice(0, 8)}…
+                        </div>
+                        <div>
+                          Plan · {String(p.learningPlanId ?? "—").slice(0, 8)}…
+                        </div>
+                        <div className="text-[var(--ink-4)]">
+                          Created {formatWhen(p.createdAt)}
+                        </div>
+                        {p.paidAt && (
+                          <div className="text-[var(--ok)] font-semibold">
+                            Paid {formatWhen(p.paidAt)}
+                          </div>
+                        )}
                       </div>
-                      {p.createdAt != null && (
-                        <div className="text-[10.5px] text-[var(--ink-4)] mt-0.5">
-                          {String(p.createdAt)}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className="font-heading text-[16px] font-semibold tabular-nums text-[var(--ink)]">
+                        ₦{Number(p.amountNaira ?? 0).toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="font-semibold text-[var(--ink)] capitalize">
+                        {p.provider || "—"}
+                      </div>
+                      {p.providerReference && (
+                        <div className="text-[10.5px] text-[var(--ink-3)] font-mono mt-0.5 max-w-[140px] truncate">
+                          {p.providerReference}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-semibold tabular-nums text-[var(--ink)]">
-                      ₦
-                      {Number(p.amountNaira ?? 0).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <span
                         className={cn(
                           "inline-flex px-2 py-0.5 rounded-full text-[10.5px] font-bold capitalize",
@@ -210,15 +291,15 @@ export default function AdminPaymentsPage() {
                         {status}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <div className="flex justify-end gap-1.5">
-                        {status === "pending" && (
+                        {status === "pending" ? (
                           <>
                             <button
                               type="button"
                               disabled={busyId === id}
                               onClick={() => act(id, "approve")}
-                              className="inline-flex items-center gap-1 h-7 px-2 rounded-[7px] text-[11px] font-bold text-[var(--ok)] hover:bg-[var(--ok-soft)] disabled:opacity-50"
+                              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-[7px] text-[11px] font-bold text-[var(--ok)] hover:bg-[var(--ok-soft)] disabled:opacity-50"
                             >
                               {busyId === id ? (
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -231,12 +312,16 @@ export default function AdminPaymentsPage() {
                               type="button"
                               disabled={busyId === id}
                               onClick={() => act(id, "reject")}
-                              className="inline-flex items-center gap-1 h-7 px-2 rounded-[7px] text-[11px] font-bold text-[var(--danger)] hover:bg-[var(--danger-soft)] disabled:opacity-50"
+                              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-[7px] text-[11px] font-bold text-[var(--danger)] hover:bg-[var(--danger-soft)] disabled:opacity-50"
                             >
                               <X className="w-3.5 h-3.5" />
                               Reject
                             </button>
                           </>
+                        ) : (
+                          <span className="text-[11px] text-[var(--ink-4)] font-semibold">
+                            —
+                          </span>
                         )}
                       </div>
                     </td>
@@ -247,17 +332,35 @@ export default function AdminPaymentsPage() {
           </table>
         </div>
       )}
-
-      {raw != null && (
-        <details className="mt-6">
-          <summary className="text-[12px] font-bold text-[var(--ink-3)] cursor-pointer">
-            Raw payments JSON
-          </summary>
-          <pre className="mt-2 text-[11px] text-[var(--ink-3)] overflow-auto max-h-72 rounded-[12px] border border-[var(--line)] p-4 bg-[var(--surface)]">
-            {JSON.stringify(raw, null, 2)}
-          </pre>
-        </details>
-      )}
     </AdminShell>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "ok" | "warn" | "muted";
+}) {
+  return (
+    <div className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow-sm)]">
+      <div className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
+        {label}
+      </div>
+      <div
+        className={cn(
+          "font-heading text-[20px] font-semibold mt-1 tabular-nums",
+          tone === "ok" && "text-[var(--ok)]",
+          tone === "warn" && "text-[var(--warn)]",
+          tone === "muted" && "text-[var(--ink-3)]",
+          tone === "default" && "text-[var(--ink)]"
+        )}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
