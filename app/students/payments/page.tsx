@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   getStudentDashboard,
   listStudentPayments,
+  getStudentReport,
   initiateStudentPayment,
   ApiError,
 } from "@/lib/api";
@@ -43,9 +44,10 @@ export default function StudentPaymentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [payRes, dash] = await Promise.all([
+      const [payRes, dash, report] = await Promise.all([
         listStudentPayments().catch(() => []),
         getStudentDashboard().catch(() => null),
+        getStudentReport().catch(() => null),
       ]);
 
       const list = Array.isArray(payRes)
@@ -53,9 +55,11 @@ export default function StudentPaymentsPage() {
         : ((payRes as { payments?: PaymentRow[] })?.payments ?? []);
       setPayments(list);
 
-      // Prefer newest pending as “invoice to pay”
       const pending = list.find((p) => p.status === "pending");
+      const anyWithPlan = list.find((p) => p.learningPlanId);
       if (pending) setLatestInvoice(pending);
+
+      let planId: string | null = null;
 
       if (dash) {
         const d = dash as {
@@ -68,9 +72,25 @@ export default function StudentPaymentsPage() {
         setHasPending(Boolean(d.payments?.hasPendingPayment));
         setHasSuccess(Boolean(d.payments?.hasSuccessfulPayment));
         if (d.currentSession?.learningPlanId) {
-          setLearningPlanId(d.currentSession.learningPlanId);
+          planId = d.currentSession.learningPlanId;
         }
       }
+
+      // Fallback: report learning plans (works before payment / session)
+      if (!planId && report) {
+        const r = report as {
+          learningPlans?: Array<{ planId?: string; id?: string }>;
+        };
+        const first = r.learningPlans?.[0];
+        planId = first?.planId || first?.id || null;
+      }
+
+      // Fallback: existing payment rows
+      if (!planId && anyWithPlan?.learningPlanId) {
+        planId = anyWithPlan.learningPlanId;
+      }
+
+      setLearningPlanId(planId);
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -84,11 +104,13 @@ export default function StudentPaymentsPage() {
     }
   }, []);
 
+
   useEffect(() => {
     load();
   }, [load]);
 
   async function onGenerateInvoice() {
+    console.log("onGenerateInvoice", { learningPlanId });
     if (!learningPlanId) {
       setMessage(
         "No learning plan on your current session. Ask your educator to assign a plan first."
@@ -223,28 +245,37 @@ export default function StudentPaymentsPage() {
                     )}
 
                     {!latestInvoice && !hasPending && (
-                      <button
-                        type="button"
-                        disabled={initiating || !learningPlanId}
-                        onClick={onGenerateInvoice}
-                        className={cn(
-                          "mt-4 inline-flex items-center gap-2 h-11 px-5 rounded-[10px] text-[13px] font-bold",
-                          "bg-[var(--danger)] text-white hover:opacity-90",
-                          "disabled:opacity-50"
+                      <>
+                        <button
+                          type="button"
+                          disabled={initiating || !learningPlanId}
+                          onClick={onGenerateInvoice}
+                          className={cn(
+                            "mt-4 inline-flex items-center gap-2 h-11 px-5 rounded-[10px] text-[13px] font-bold",
+                            "bg-[var(--danger)] text-white hover:opacity-90",
+                            "disabled:opacity-50 disabled:cursor-not-allowed"
+                          )}
+                        >
+                          {initiating ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Generating…
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="w-4 h-4" />
+                              Generate payment
+                            </>
+                          )}
+                        </button>
+
+                        {!learningPlanId && (
+                          <p className="mt-2 text-[12px] font-semibold text-[var(--warn)]">
+                            No learning plan found yet. Ask your educator to assign one, then
+                            refresh this page.
+                          </p>
                         )}
-                      >
-                        {initiating ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Generating…
-                          </>
-                        ) : (
-                          <>
-                            <CreditCard className="w-4 h-4" />
-                            Generate payment
-                          </>
-                        )}
-                      </button>
+                      </>
                     )}
 
                     {/* Allow regenerate only if no invoice yet; if API returned 200 existing, load() should surface it */}

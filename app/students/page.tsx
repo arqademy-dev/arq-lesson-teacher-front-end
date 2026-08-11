@@ -134,7 +134,7 @@ export default function StudentDashboardPage() {
             <section className="mt-8 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
               
               {/* If no successful payment, primary CTA goes to payments */}
-              {/* {payments && !payments.hasSuccessfulPayment ? (
+              {payments && !payments.hasSuccessfulPayment ? (
                 <Link
                   href="/students/payments"
                   className={cn(
@@ -158,7 +158,7 @@ export default function StudentDashboardPage() {
                   {session?.isOverdue ? "Continue catch-up session" : "Go to today's session"}
                   <ArrowRight className="w-4 h-4" />
                 </Link>
-              )} */}
+              )}
 
               <div className="px-5 py-4 border-b border-[var(--line-soft)] flex items-center gap-3">
                 <div className="w-11 h-11 rounded-[11px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)] flex-none">
