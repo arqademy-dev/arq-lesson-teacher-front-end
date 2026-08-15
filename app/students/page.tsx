@@ -147,17 +147,18 @@ export default function StudentDashboardPage() {
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               ) : (
-                <Link
-                  href="/students/session"
-                  className={cn(
-                    "mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
-                    "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)]"
-                  )}
-                >
-                  <BookOpen className="w-4 h-4" />
-                  {session?.isOverdue ? "Continue catch-up session" : "Go to today's session"}
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
+                // <Link
+                //   href="/students/session"
+                //   className={cn(
+                //     "mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
+                //     "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)]"
+                //   )}
+                // >
+                //   <BookOpen className="w-4 h-4" />
+                //   {session?.isOverdue ? "Continue catch-up session" : "Go to today's session"}
+                //   <ArrowRight className="w-4 h-4" />
+                // </Link>
+                ""
               )}
 
               <div className="px-5 py-4 border-b border-[var(--line-soft)] flex items-center gap-3">
