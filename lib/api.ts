@@ -1,6 +1,12 @@
 /**
  * Typed API client for Arqademy Lesson Teacher backend.
  * Always sends credentials (HTTP-only cookie auth).
+ *
+ * skipAuthRedirect is true ONLY on the three login mutations —
+ * a 401 there means "wrong password" and should surface inline,
+ * not bounce the user off the login page they're already on.
+ * Everything else defaults to false: an expired/invalid session
+ * redirects straight to the correct login route.
  */
 
 const API_BASE =
@@ -80,7 +86,9 @@ export async function api<T = unknown>(
   return data as T;
 }
 
-/* ---------- Student ---------- */
+/* ============================================================
+   STUDENT — Auth
+   ============================================================ */
 
 export type StudentLoginPayload = {
   email: string;
@@ -91,13 +99,30 @@ export async function studentLogin(payload: StudentLoginPayload) {
   return api("/api/students/login", {
     method: "POST",
     body: payload,
-    skipAuthRedirect: true,
+    skipAuthRedirect: true, // exception — see file header
   });
 }
 
 export async function getStudentMe() {
   return api("/api/students/me", { skipAuthRedirect: false });
 }
+
+/**
+ * NOTE: not in the current OpenAPI doc — guessed by symmetry with
+ * /api/students/login. Confirm the real route with backend; swap
+ * to /api/users/logout if the cookie/session is role-agnostic.
+ */
+export async function studentLogout() {
+  // return api("/api/students/logout", {
+  return api("/api/users/logout", {
+    method: "POST",
+    skipAuthRedirect: false,
+  });
+}
+
+/* ============================================================
+   STUDENT — Daily workflow
+   ============================================================ */
 
 export async function getStudentDashboard() {
   return api("/api/students/me/dashboard", { skipAuthRedirect: false });
@@ -110,6 +135,7 @@ export async function getCurrentSession() {
 export async function completeSession(sessionId: string) {
   return api(`/api/students/me/sessions/${sessionId}/complete`, {
     method: "POST",
+    skipAuthRedirect: false,
   });
 }
 
@@ -121,10 +147,48 @@ export async function submitInteraction(payload: {
   return api("/api/students/me/submissions", {
     method: "POST",
     body: payload,
+    skipAuthRedirect: false,
   });
 }
 
-/* ---------- Educator ---------- */
+/* ============================================================
+   STUDENT — Payments & report
+   ============================================================ */
+
+export async function initiateStudentPayment(learningPlanId: string) {
+  return api<{
+    message?: string;
+    payment?: {
+      id: string;
+      studentId?: string;
+      learningPlanId?: string;
+      pricingTierId?: string;
+      amountNaira?: number;
+      status?: string;
+      provider?: string | null;
+      providerReference?: string | null;
+      paidAt?: string | null;
+      createdAt?: string;
+    };
+    redirectUrl?: string | null;
+  }>("/api/students/payments/initiate", {
+    method: "POST",
+    body: { learningPlanId },
+    skipAuthRedirect: false,
+  });
+}
+
+export async function listStudentPayments() {
+  return api("/api/students/payments/me", { skipAuthRedirect: false });
+}
+
+export async function getStudentReport() {
+  return api("/api/students/me/report", { skipAuthRedirect: false });
+}
+
+/* ============================================================
+   EDUCATOR — Auth
+   ============================================================ */
 
 export type EducatorRegisterPayload = {
   email: string;
@@ -145,9 +209,7 @@ export type EducatorProfile = {
   email: string;
   arqId: string;
   role?: string;
-  /** Live API field */
   approvalStatus: "approve" | "pending" | "closed" | "suspended";
-  /** Optional alias if some responses still use the old name */
   accountApproval?: "approve" | "pending" | "closed" | "suspended";
   specialization?: string | null;
   bio?: string | null;
@@ -182,7 +244,7 @@ export async function educatorLogin(payload: EducatorLoginPayload) {
   return api("/api/users/login", {
     method: "POST",
     body: payload,
-    skipAuthRedirect: false,
+    skipAuthRedirect: true, // exception — see file header
   });
 }
 
@@ -197,115 +259,43 @@ export async function getEducatorMe() {
   return api<EducatorProfile>("/api/users/me", { skipAuthRedirect: false });
 }
 
+/* ============================================================
+   EDUCATOR — Dashboard
+   ============================================================ */
+
 export async function getEducatorDashboard() {
   return api("/api/educators/dashboard/summary", { skipAuthRedirect: false });
 }
 
+/* ============================================================
+   EDUCATOR — Students
+   ============================================================ */
 
-
-
-
-/* ---------- Admin ---------- */
-/* ---------- Admin ---------- */
-/* ---------- Admin ---------- */
-/* ---------- Admin ---------- */
-
-export type AdminLoginPayload = {
-  email: string;
-  password: string;
-};
-
-export async function adminLogin(payload: AdminLoginPayload) {
-  return api("/api/admin/login", {
-    method: "POST",
-    body: payload,
-    skipAuthRedirect: true,
-  });
-}
-
-export async function adminLogout() {
-  return api("/api/admin/logout", {
-    method: "POST",
-    skipAuthRedirect: true,
-  }).catch(() => null); // if endpoint missing, still clear client route
-}
-
-export type AdminEducator = {
-  id: string;
+export type EnrollStudentPayload = {
   firstName: string;
   lastName: string;
   email: string;
-  arqId: string;
-  approvalStatus?: "approve" | "pending" | "closed" | "suspended";
-  accountApproval?: "approve" | "pending" | "closed" | "suspended";  
-  specialization?: string | null;
-  bio?: string | null;
-  hiredDate?: string | null;
-  userId?: string;
+  academicLevel?: string;
+  password?: string;
 };
 
-export async function listPendingEducators() {
-  return api<AdminEducator[]>("/api/admin/educators/pending", {
+export async function enrollStudent(payload: EnrollStudentPayload) {
+  return api("/api/educators/students", {
+    method: "POST",
+    body: payload,
     skipAuthRedirect: false,
   });
 }
 
-export async function listAllEducators() {
-  return api<AdminEducator[]>("/api/admin/educators", {
+export async function listEducatorStudents() {
+  return api("/api/educators/students", { skipAuthRedirect: false });
+}
+
+export async function getEducatorStudent(studentId: string) {
+  return api(`/api/educators/students/${studentId}`, {
     skipAuthRedirect: false,
   });
 }
-
-export async function setEducatorApproval(
-  educatorId: string,
-  action: "approve" | "suspend" | "close"
-) {
-  return api(`/api/admin/educators/${educatorId}/approval`, {
-    method: "PATCH",
-    body: { action },
-  });
-}
-
-export async function getAdminDashboard() {
-  return api("/api/admin/dashboard/summary", { skipAuthRedirect: false });
-}
-
-
-/* ---------- Admin educators detail / students ---------- */
-
-export function educatorStatusOf(e: {
-  approvalStatus?: string;
-  accountApproval?: string;
-}): string {
-  return e.approvalStatus ?? e.accountApproval ?? "pending";
-}
-
-/** Full educator profile + attached students (admin) */
-export async function getAdminEducator(educatorId: string) {
-  return api(`/api/admin/educators/${educatorId}`, {
-    skipAuthRedirect: false,
-  });
-}
-
-/** Admin full assessment report for any student */
-export async function getAdminStudentReport(studentId: string) {
-  return api(`/api/admin/students/${studentId}/report`, {
-    skipAuthRedirect: false,
-  });
-}
-
-/** Admin learning history for a student (if backend exposes it) */
-export async function getAdminStudentLearningHistory(studentId: string) {
-  return api(`/api/admin/students/${studentId}/learning-history`, {
-    skipAuthRedirect: false,
-  });
-}
-
-
-
-/* ---------- Educator students ---------- */
-/* ---------- Educator students ---------- */
-/* ---------- Educator students ---------- */
 
 export async function getEducatorStudentReport(studentId: string) {
   return api(`/api/educators/students/${studentId}/report`, {
@@ -319,17 +309,150 @@ export async function getEducatorStudentLearningHistory(studentId: string) {
   });
 }
 
-/* ---------- Admin payments ---------- */
+/* ============================================================
+   EDUCATOR — Learning plans
+   ============================================================ */
+
+export type CreateLearningPlanPayload = {
+  studentId: string;
+  sessionsPerWeek: number;
+  preferredDays: string[];
+  startDate: string; // YYYY-MM-DD
+  requireCorrectAnswersToProgress?: boolean;
+  topics: Array<{ topicId: string; customDurationDays?: number }>;
+};
+
+export async function listEducatorLearningPlans() {
+  return api("/api/educators/learning-plans", { skipAuthRedirect: false });
+}
+
+export async function createLearningPlan(payload: CreateLearningPlanPayload) {
+  return api("/api/educators/learning-plans", {
+    method: "POST",
+    body: payload,
+    skipAuthRedirect: false,
+  });
+}
+
+export async function getLearningPlan(planId: string) {
+  return api(`/api/educators/learning-plans/${planId}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+export async function listLearningPlansForStudent(studentId: string) {
+  return api(`/api/educators/learning-plans/student/${studentId}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+/* ============================================================
+   ADMIN — Auth
+   ============================================================ */
+
+export type AdminLoginPayload = {
+  email: string;
+  password: string;
+};
+
+export async function adminLogin(payload: AdminLoginPayload) {
+  return api("/api/admin/login", {
+    method: "POST",
+    body: payload,
+    skipAuthRedirect: true, // exception — see file header
+  });
+}
+
+export async function adminLogout() {
+  // return api("/api/admin/logout", {
+  return api("/api/users/logout", {
+    method: "POST",
+    skipAuthRedirect: false,
+  });
+}
+
+/* ============================================================
+   ADMIN — Educators
+   ============================================================ */
+
+export type AdminEducator = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  arqId: string;
+  approvalStatus?: "approve" | "pending" | "closed" | "suspended";
+  accountApproval?: "approve" | "pending" | "closed" | "suspended";
+  specialization?: string | null;
+  bio?: string | null;
+  hiredDate?: string | null;
+  userId?: string;
+};
+
+export function educatorStatusOf(e: {
+  approvalStatus?: string;
+  accountApproval?: string;
+}): string {
+  return e.approvalStatus ?? e.accountApproval ?? "pending";
+}
+
+export async function listPendingEducators() {
+  return api<AdminEducator[]>("/api/admin/educators/pending", {
+    skipAuthRedirect: false,
+  });
+}
+
+export async function listAllEducators() {
+  return api<AdminEducator[]>("/api/admin/educators", {
+    skipAuthRedirect: false,
+  });
+}
+
+export async function getAdminEducator(educatorId: string) {
+  return api(`/api/admin/educators/${educatorId}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+export async function setEducatorApproval(
+  educatorId: string,
+  action: "approve" | "suspend" | "close"
+) {
+  return api(`/api/admin/educators/${educatorId}/approval`, {
+    method: "PATCH",
+    body: { action },
+    skipAuthRedirect: false,
+  });
+}
+
+/* ============================================================
+   ADMIN — Students
+   ============================================================ */
+
+export async function getAdminStudentReport(studentId: string) {
+  return api(`/api/admin/students/${studentId}/report`, {
+    skipAuthRedirect: false,
+  });
+}
+
+export async function getAdminStudentLearningHistory(studentId: string) {
+  return api(`/api/admin/students/${studentId}/learning-history`, {
+    skipAuthRedirect: false,
+  });
+}
+
+/* ============================================================
+   ADMIN — Payments
+   ============================================================ */
 
 export async function listPendingPayments() {
-  return api("/api/admin/payments/pending", { skipAuthRedirect: true });
+  return api("/api/admin/payments/pending", { skipAuthRedirect: false });
 }
 
 export async function listAllPayments() {
-  return api("/api/admin/payments", { skipAuthRedirect: true });
+  return api("/api/admin/payments", { skipAuthRedirect: false });
 }
 
-/** action: approve → success, reject → failed (adjust if backend uses different verbs) */
 export async function setPaymentStatus(
   paymentId: string,
   action: "approve" | "reject"
@@ -337,25 +460,32 @@ export async function setPaymentStatus(
   return api(`/api/admin/payments/${paymentId}/${action}`, {
     method: "PATCH",
     body: { action },
+    skipAuthRedirect: false,
   });
 }
 
-/* ---------- Admin curriculum ---------- */
+/* ============================================================
+   ADMIN — Curriculum: Subjects
+   ============================================================ */
 
 export async function listSubjects() {
-  return api("/api/admin/curriculum/subjects", { skipAuthRedirect: true });
+  return api("/api/admin/curriculum/subjects", { skipAuthRedirect: false });
 }
 
 export async function createSubject(body: {
   title: string;
   description?: string;
 }) {
-  return api("/api/admin/curriculum/subjects", { method: "POST", body });
+  return api("/api/admin/curriculum/subjects", {
+    method: "POST",
+    body,
+    skipAuthRedirect: false,
+  });
 }
 
 export async function getSubject(id: string) {
   return api(`/api/admin/curriculum/subjects/${id}`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
@@ -366,16 +496,24 @@ export async function updateSubject(
   return api(`/api/admin/curriculum/subjects/${id}`, {
     method: "PATCH",
     body,
+    skipAuthRedirect: false,
   });
 }
 
 export async function deleteSubject(id: string) {
-  return api(`/api/admin/curriculum/subjects/${id}`, { method: "DELETE" });
+  return api(`/api/admin/curriculum/subjects/${id}`, {
+    method: "DELETE",
+    skipAuthRedirect: false,
+  });
 }
+
+/* ============================================================
+   ADMIN — Curriculum: Classes
+   ============================================================ */
 
 export async function listClasses(subjectId: string) {
   return api(`/api/admin/curriculum/subjects/${subjectId}/classes`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
@@ -386,6 +524,7 @@ export async function createClass(
   return api(`/api/admin/curriculum/subjects/${subjectId}/classes`, {
     method: "POST",
     body,
+    skipAuthRedirect: false,
   });
 }
 
@@ -396,16 +535,24 @@ export async function updateClass(
   return api(`/api/admin/curriculum/classes/${id}`, {
     method: "PATCH",
     body,
+    skipAuthRedirect: false,
   });
 }
 
 export async function deleteClass(id: string) {
-  return api(`/api/admin/curriculum/classes/${id}`, { method: "DELETE" });
+  return api(`/api/admin/curriculum/classes/${id}`, {
+    method: "DELETE",
+    skipAuthRedirect: false,
+  });
 }
+
+/* ============================================================
+   ADMIN — Curriculum: Topics
+   ============================================================ */
 
 export async function listTopics(classId: string) {
   return api(`/api/admin/curriculum/classes/${classId}/topics`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
@@ -421,6 +568,7 @@ export async function createTopic(
   return api(`/api/admin/curriculum/classes/${classId}/topics`, {
     method: "POST",
     body,
+    skipAuthRedirect: false,
   });
 }
 
@@ -436,149 +584,66 @@ export async function updateTopic(
   return api(`/api/admin/curriculum/topics/${id}`, {
     method: "PATCH",
     body,
+    skipAuthRedirect: false,
   });
 }
 
 export async function deleteTopic(id: string) {
-  return api(`/api/admin/curriculum/topics/${id}`, { method: "DELETE" });
+  return api(`/api/admin/curriculum/topics/${id}`, {
+    method: "DELETE",
+    skipAuthRedirect: false,
+  });
 }
+
+/* ============================================================
+   ADMIN — Curriculum: Resources & Interactive Elements
+   ============================================================ */
 
 export async function listResources(topicId: string) {
   return api(`/api/admin/curriculum/topics/${topicId}/resources`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
 export async function listInteractiveElements(resourceId: string) {
   return api(
     `/api/admin/curriculum/resources/${resourceId}/interactive-elements`,
-    { skipAuthRedirect: true }
+    { skipAuthRedirect: false }
   );
 }
 
+/* ============================================================
+   ADMIN — Dashboard
+   ============================================================ */
 
-/* ---------- Student payments ---------- */
-/* ---------- Student payments ---------- */
-
-/** Create invoice — price computed server-side from topic count */
-export async function initiateStudentPayment(learningPlanId: string) {
-  return api<{
-    message?: string;
-    payment?: {
-      id: string;
-      studentId?: string;
-      learningPlanId?: string;
-      pricingTierId?: string;
-      amountNaira?: number;
-      status?: string;
-      provider?: string | null;
-      providerReference?: string | null;
-      paidAt?: string | null;
-      createdAt?: string;
-    };
-    redirectUrl?: string | null;
-  }>("/api/students/payments/initiate", {
-    method: "POST",
-    body: { learningPlanId },
-    skipAuthRedirect: true,
-  });
+export async function getAdminDashboard() {
+  return api("/api/admin/dashboard/summary", { skipAuthRedirect: false });
 }
 
-/** History — try me/payments; if 404 we'll show initiate result only */
-export async function listStudentPayments() {
-  return api("/api/students/payments/me", { skipAuthRedirect: true });
-}
-
-export async function getStudentReport() {
-  return api("/api/students/me/report", { skipAuthRedirect: true });
-}
-
-/* ---------- Educator: enroll + learning plans ---------- */
-
-export type EnrollStudentPayload = {
-  firstName: string;
-  lastName: string;
-  email: string;
-  academicLevel?: string;
-  password?: string;
-};
-
-export async function listEducatorLearningPlans() {
-  return api("/api/educators/learning-plans", { skipAuthRedirect: true });
-}
-
-export async function enrollStudent(payload: EnrollStudentPayload) {
-  return api("/api/educators/students", {
-    method: "POST",
-    body: payload,
-    skipAuthRedirect: true,
-  });
-}
-
-export async function listEducatorStudents() {
-  return api("/api/educators/students", { skipAuthRedirect: true });
-}
-
-export async function getEducatorStudent(studentId: string) {
-  return api(`/api/educators/students/${studentId}`, {
-    skipAuthRedirect: true,
-  });
-}
-
-export type CreateLearningPlanPayload = {
-  studentId: string;
-  sessionsPerWeek: number;
-  preferredDays: string[];
-  startDate: string; // YYYY-MM-DD
-  requireCorrectAnswersToProgress?: boolean;
-  topics: Array<{ topicId: string; customDurationDays?: number }>;
-};
-
-export async function createLearningPlan(payload: CreateLearningPlanPayload) {
-  return api("/api/educators/learning-plans", {
-    method: "POST",
-    body: payload,
-    skipAuthRedirect: true,
-  });
-}
-
-export async function getLearningPlan(planId: string) {
-  return api(`/api/educators/learning-plans/${planId}`, {
-    skipAuthRedirect: true,
-  });
-}
-
-export async function listLearningPlansForStudent(studentId: string) {
-  return api(`/api/educators/learning-plans/student/${studentId}`, {
-    skipAuthRedirect: true,
-  });
-}
-
-/**
- * Curriculum catalog for plan builder.
- * Prefer educator read routes; fall back to admin paths if your API shares them.
- */
-
-/* ---------- Curriculum catalog (read — admin paths) ---------- */
+/* ============================================================
+   CURRICULUM CATALOG — read-only, shared by the educator plan builder
+   (same admin routes, kept as separate named exports for clarity
+   at the call site)
+   ============================================================ */
 
 export async function listCurriculumSubjects() {
-  return api("/api/admin/curriculum/subjects", { skipAuthRedirect: true });
+  return api("/api/admin/curriculum/subjects", { skipAuthRedirect: false });
 }
 
 export async function listCurriculumClasses(subjectId: string) {
   return api(`/api/admin/curriculum/subjects/${subjectId}/classes`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
 export async function listCurriculumTopics(classId: string) {
   return api(`/api/admin/curriculum/classes/${classId}/topics`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }
 
 export async function listCurriculumResources(topicId: string) {
   return api(`/api/admin/curriculum/topics/${topicId}/resources`, {
-    skipAuthRedirect: true,
+    skipAuthRedirect: false,
   });
 }

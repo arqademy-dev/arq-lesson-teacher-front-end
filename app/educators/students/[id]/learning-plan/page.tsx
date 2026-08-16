@@ -418,32 +418,36 @@ export default function AssignLearningPlanPage() {
                 />
               </label>
 
-              <div>
-                <p className="text-[11px] font-bold text-[var(--ink-3)] mb-2">
-                  Preferred days
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {DAYS.map((d) => {
-                    const on = preferredDays.includes(d);
-                    return (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() => toggleDay(d)}
-                        className={cn(
-                          "h-8 px-2.5 rounded-[8px] text-[11px] font-bold capitalize",
-                          on
-                            ? "bg-[var(--brand)] text-white"
-                            : "bg-[var(--surface-3)] text-[var(--ink-2)]"
-                        )}
-                      >
-                        {d.slice(0, 3)}
-                      </button>
-                    );
-                  })}
-                </div>
+            <div>
+              <p className="text-[11px] font-bold text-[var(--ink-3)] mb-2">
+                Preferred days
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {DAYS.map((d) => {
+                  const on = preferredDays.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => toggleDay(d)}
+                      className={cn(
+                        "h-9 px-3 rounded-ctl text-[11px] font-bold capitalize border-2 transition-colors flex items-center gap-1.5",
+                        on
+                          ? "bg-brand border-brand text-white shadow-sm font-black" 
+                          : "bg-[var(--surface-3)] border-[var(--line)] text-[var(--ink-2)] hover:border-brand"
+                      )}
+                    >
+                      {on && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                      {d.slice(0, 3)}
+                    </button>
+                  );
+                })}
               </div>
-
+              <p className="mt-1.5 text-[10.5px] text-[var(--ink-4)]">
+                {preferredDays.length} day{preferredDays.length === 1 ? "" : "s"} selected
+              </p>
+            </div>
               <label className="block text-[11px] font-bold text-[var(--ink-3)]">
                 Start date
                 <input

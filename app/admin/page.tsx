@@ -7,6 +7,7 @@ import {
   getAdminDashboard,
   listPendingEducators,
   ApiError,
+  adminLogout,
 } from "@/lib/api";
 import {
   Loader2,
@@ -72,8 +73,12 @@ export default function AdminDashboardPage() {
     })();
   }, []);
 
-  function logout() {
-    window.location.href = "/admin/login";
+  async function logout() {
+    try {
+      await adminLogout();
+    } finally {
+      window.location.href = "/admin/login";
+    }
   }
 
   if (loading) {

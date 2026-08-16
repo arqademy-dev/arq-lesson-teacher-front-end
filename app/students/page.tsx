@@ -6,6 +6,7 @@ import {
   getStudentDashboard,
   getStudentMe,
   ApiError,
+  studentLogout,
 } from "@/lib/api";
 import type { StudentDashboardSummary } from "@/components/learning/types";
 import {
@@ -73,6 +74,14 @@ export default function StudentDashboardPage() {
       ? `${me.firstName ?? ""} ${me.lastName ?? ""}`.trim()
       : null;
 
+  async function handleLogout() {
+  try {
+    await studentLogout();
+  } finally {
+    window.location.href = "/students/login";
+  }
+}
+
   return (
     <div className="relative min-h-screen">
       <div className="bg-grid" />
@@ -90,6 +99,7 @@ export default function StudentDashboardPage() {
         <Link
           href="/students/login"
           className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[var(--ink-2)] hover:text-[var(--brand)]"
+          onClick={handleLogout}
         >
           <LogOut className="w-4 h-4" />
           Sign out
