@@ -1,12 +1,25 @@
-import type { Resource } from "../types";
+import type { Resource, SessionSubmission } from "../types";
 import { ArticleBody } from "./ArticleBody";
+import { InteractiveVideoPlayer } from "./Interactivevideoplayer";
 
 type Props = {
   resource: Resource;
+  /** Required for video resources that carry timestamped interactive elements. */
+  scheduledSessionId: string;
+  /** Whether a wrong checkpoint answer must be retried before the video resumes. */
+  requireCorrectAnswersToProgress: boolean;
+  /** Latest submission per element for this session (refresh-restore). */
+  submissions?: SessionSubmission[];
   onVideoTimeUpdate?: (seconds: number) => void;
 };
 
-export function ResourceRenderer({ resource, onVideoTimeUpdate }: Props) {
+export function ResourceRenderer({
+  resource,
+  scheduledSessionId,
+  requireCorrectAnswersToProgress,
+  submissions = [],
+  onVideoTimeUpdate,
+}: Props) {
   const type = resource.resourceType;
 
   if (type === "article") {
@@ -42,9 +55,32 @@ export function ResourceRenderer({ resource, onVideoTimeUpdate }: Props) {
 
   if (type === "video") {
     const url = resource.urlOrPath || "";
-    const isYouTube =
-      url.includes("youtube.com") || url.includes("youtu.be");
+    const isYouTube = url.includes("youtube.com") || url.includes("youtu.be");
+    const elements = resource.interactiveElements ?? [];
+    const hasCheckpoints = elements.some(
+      (e) => typeof e.videoTimestampSeconds === "number"
+    );
 
+    // Timestamped YouTube checkpoints → hand off to the interactive player,
+    // which owns pause/resume, popups, and grading for this resource.
+    if (isYouTube && hasCheckpoints) {
+      const elementIds = new Set(elements.map((e) => e.id));
+      const resourceSubmissions = submissions.filter((s) =>
+        elementIds.has(s.interactiveElementId)
+      );
+      return (
+        <InteractiveVideoPlayer
+          videoUrl={url}
+          title={resource.title}
+          scheduledSessionId={scheduledSessionId}
+          elements={elements}
+          requireCorrectAnswersToProgress={requireCorrectAnswersToProgress}
+          initialSubmissions={resourceSubmissions}
+        />
+      );
+    }
+
+    // Plain video (file, or YouTube with no checkpoints) — unchanged behavior.
     return (
       <div className="space-y-3">
         <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)]">
@@ -75,12 +111,6 @@ export function ResourceRenderer({ resource, onVideoTimeUpdate }: Props) {
             </div>
           )}
         </div>
-        {isYouTube && (
-          <p className="text-[11.5px] text-[var(--ink-4)] font-semibold">
-            Video checkpoints appear below (YouTube cannot pause at exact times
-            in this player).
-          </p>
-        )}
       </div>
     );
   }
