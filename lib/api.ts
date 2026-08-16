@@ -346,6 +346,44 @@ export async function listLearningPlansForStudent(studentId: string) {
   });
 }
 
+export type UpdateLearningPlanPayload = {
+  sessionsPerWeek?: number;
+  preferredDays?: string[];
+  startDate?: string;
+  endDate?: string | null;
+  status?: "active" | "completed" | "paused" | "cancelled";
+  requireCorrectAnswersToProgress?: boolean;
+};
+
+export async function updateLearningPlan(
+  id: string,
+  body: UpdateLearningPlanPayload
+) {
+  return api(`/api/educators/learning-plans/${id}`, {
+    method: "PATCH",
+    body,
+    skipAuthRedirect: false,
+  });
+}
+
+export type UpdateScheduledSessionPayload = {
+  scheduledDate?: string;
+  sessionDayNumber?: number;
+  isCompleted?: boolean;
+  educatorNotes?: string;
+};
+
+export async function updateScheduledSession(
+  sessionId: string,
+  body: UpdateScheduledSessionPayload
+) {
+  return api(`/api/educators/learning-plans/sessions/${sessionId}`, {
+    method: "PATCH",
+    body,
+    skipAuthRedirect: false,
+  });
+}
+
 /* ============================================================
    ADMIN — Auth
    ============================================================ */

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   getEducatorMe,
   getEducatorStudent,
@@ -10,6 +10,7 @@ import {
   listCurriculumSubjects,
   listCurriculumClasses,
   listCurriculumTopics,
+  listLearningPlansForStudent,
   educatorLogout,
   ApiError,
 } from "@/lib/api";
@@ -36,8 +37,35 @@ type TopicRow = {
   subjectTitle: string;
 };
 
+/* ---------- duplicate-plan gate helpers ---------- */
+
+type SessionRow = { id: string; isCompleted?: boolean };
+type PlanTopicRow = { sessions?: SessionRow[] };
+type ExistingPlan = {
+  id: string;
+  status?: string;
+  startDate?: string;
+  createdAt?: string;
+  topics?: PlanTopicRow[];
+};
+
+function allSessionsComplete(plan: ExistingPlan): boolean {
+  const topics = plan.topics ?? [];
+  if (topics.length === 0) return false; // schedule not generated yet — be safe
+  return topics.every((t) =>
+    (t.sessions ?? []).every((s) => s.isCompleted === true)
+  );
+}
+
+/** A plan blocks a new one unless it's explicitly done/cancelled or every session is checked off. */
+function planBlocksNewPlan(plan: ExistingPlan): boolean {
+  if (plan.status === "completed" || plan.status === "cancelled") return false;
+  return !allSessionsComplete(plan);
+}
+
 export default function AssignLearningPlanPage() {
   const params = useParams();
+  const router = useRouter();
   const studentId = String(params.id || "");
 
   const [educatorName, setEducatorName] = useState("Educator");
@@ -68,6 +96,10 @@ export default function AssignLearningPlanPage() {
   const [error, setError] = useState<string | null>(null);
   const [successJson, setSuccessJson] = useState<unknown>(null);
 
+  // duplicate-plan gate state
+  const [checkingExisting, setCheckingExisting] = useState(true);
+  const [blockingPlan, setBlockingPlan] = useState<ExistingPlan | null>(null);
+
   useEffect(() => {
     (async () => {
       try {
@@ -89,6 +121,22 @@ export default function AssignLearningPlanPage() {
         setSubjects(
           Array.isArray(subs) ? (subs as Record<string, unknown>[]) : []
         );
+
+        // duplicate-plan gate: does this student already have a blocking plan?
+        const existing = await listLearningPlansForStudent(studentId).catch(
+          () => []
+        );
+        const plans = Array.isArray(existing)
+          ? (existing as ExistingPlan[])
+          : [];
+        const blocking = plans
+          .filter(planBlocksNewPlan)
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt ?? b.startDate ?? 0).getTime() -
+              new Date(a.createdAt ?? a.startDate ?? 0).getTime()
+          )[0];
+        setBlockingPlan(blocking ?? null);
       } catch (err) {
         setError(
           err instanceof ApiError
@@ -99,6 +147,7 @@ export default function AssignLearningPlanPage() {
         );
       } finally {
         setLoading(false);
+        setCheckingExisting(false);
       }
     })();
   }, [studentId]);
@@ -226,6 +275,57 @@ export default function AssignLearningPlanPage() {
     classes.find((c) => String(c.id) === classId)?.title ?? ""
   );
 
+  // ---- Blocked: student already has an in-progress plan ----
+  if (!loading && !checkingExisting && blockingPlan) {
+    return (
+      <EducatorShell
+        title="Assign learning plan"
+        subtitle="Classroom"
+        userName={educatorName}
+        arqId={arqId}
+        onLogout={handleLogout}
+      >
+        <Link
+          href={`/educators/students/${studentId}`}
+          className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[var(--ink-2)] hover:text-[var(--brand)] mb-5"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {studentLabel}
+        </Link>
+
+        <div className="max-w-xl rounded-[var(--r-card)] border border-[var(--warn)] bg-[var(--surface)] p-6 space-y-4">
+          <p className="text-[13px] font-bold text-[var(--warn)]">
+            {studentLabel} already has a learning plan in progress
+          </p>
+          <p className="text-[12.5px] text-[var(--ink-3)] leading-relaxed">
+            You can&apos;t start a new plan until every session on the
+            current one is marked complete (or the plan is cancelled). Edit
+            the existing plan instead — reschedule sessions or mark them
+            complete/incomplete.
+          </p>
+          <div className="text-[12px] text-[var(--ink-3)] font-semibold">
+            Status:{" "}
+            <span className="capitalize">
+              {blockingPlan.status ?? "active"}
+            </span>
+            {blockingPlan.startDate ? ` · started ${blockingPlan.startDate}` : ""}
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              router.push(
+                `/educators/students/${studentId}/learning-plan/${blockingPlan.id}`
+              )
+            }
+            className="inline-flex h-10 px-4 items-center rounded-[9px] text-[12.5px] font-bold bg-[var(--brand)] text-white border-2 border-[var(--brand-ink)]"
+          >
+            Open existing plan
+          </button>
+        </div>
+      </EducatorShell>
+    );
+  }
+
   return (
     <EducatorShell
       title="Assign learning plan"
@@ -242,7 +342,7 @@ export default function AssignLearningPlanPage() {
         {studentLabel}
       </Link>
 
-      {loading && (
+      {(loading || checkingExisting) && (
         <div className="flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading curriculum…
@@ -275,7 +375,8 @@ export default function AssignLearningPlanPage() {
           </Link>
         </div>
       ) : (
-        !loading && (
+        !loading &&
+        !checkingExisting && (
           <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
             {/* Class + topics */}
             <section className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
@@ -418,36 +519,38 @@ export default function AssignLearningPlanPage() {
                 />
               </label>
 
-            <div>
-              <p className="text-[11px] font-bold text-[var(--ink-3)] mb-2">
-                Preferred days
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {DAYS.map((d) => {
-                  const on = preferredDays.includes(d);
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => toggleDay(d)}
-                      className={cn(
-                        "h-9 px-3 rounded-ctl text-[11px] font-bold capitalize border-2 transition-colors flex items-center gap-1.5",
-                        on
-                          ? "bg-brand border-brand text-white shadow-sm font-black" 
-                          : "bg-[var(--surface-3)] border-[var(--line)] text-[var(--ink-2)] hover:border-brand"
-                      )}
-                    >
-                      {on && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                      {d.slice(0, 3)}
-                    </button>
-                  );
-                })}
+              <div>
+                <p className="text-[11px] font-bold text-[var(--ink-3)] mb-2">
+                  Preferred days
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {DAYS.map((d) => {
+                    const on = preferredDays.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggleDay(d)}
+                        className={cn(
+                          "h-9 px-3 rounded-[8px] text-[11px] font-bold capitalize border-2 transition-colors flex items-center gap-1.5",
+                          on
+                            ? "bg-[var(--brand)] border-[var(--brand)] text-white shadow-sm"
+                            : "bg-[var(--surface-3)] border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--brand)]"
+                        )}
+                      >
+                        {on && <Check className="w-3 h-3" />}
+                        {d.slice(0, 3)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-[10.5px] text-[var(--ink-4)]">
+                  {preferredDays.length} day
+                  {preferredDays.length === 1 ? "" : "s"} selected
+                </p>
               </div>
-              <p className="mt-1.5 text-[10.5px] text-[var(--ink-4)]">
-                {preferredDays.length} day{preferredDays.length === 1 ? "" : "s"} selected
-              </p>
-            </div>
+
               <label className="block text-[11px] font-bold text-[var(--ink-3)]">
                 Start date
                 <input
@@ -480,7 +583,7 @@ export default function AssignLearningPlanPage() {
                 type="button"
                 disabled={saving || pickedList.length === 0}
                 onClick={onCreate}
-                className="w-full h-11 rounded-[10px] text-[13px] font-heading font-semibold bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)] disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full h-11 rounded-[10px] text-[13px] font-heading font-semibold bg-[var(--brand)] text-white border-2 border-[var(--brand-ink)] hover:bg-[var(--brand-ink)] disabled:opacity-50 disabled:border-transparent flex items-center justify-center gap-2 shadow-sm"
               >
                 {saving ? (
                   <>
