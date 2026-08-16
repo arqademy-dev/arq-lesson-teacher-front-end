@@ -113,7 +113,7 @@ export default function EditLearningPlanPage() {
       setSessionsPerWeek(p.sessionsPerWeek);
       setPreferredDays(p.preferredDays ?? []);
       setStartDate(p.startDate);
-      setStatus(p.status);
+      setStatus(p.status as LearningPlanStatus);
       setRequireCorrect(p.requireCorrectAnswersToProgress);
     } catch (err) {
       setError(
@@ -147,7 +147,7 @@ export default function EditLearningPlanPage() {
         sessionsPerWeek,
         preferredDays,
         startDate,
-        status: status as PlanDetail["status"],
+        status: status as LearningPlanStatus,
         requireCorrectAnswersToProgress: requireCorrect,
       });
       setPlan(updated as PlanDetail);
@@ -425,7 +425,7 @@ export default function EditLearningPlanPage() {
               Status
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value)}
+                onChange={(e) => setStatus(e.target.value as LearningPlanStatus)}
                 className="mt-1 w-full h-10 px-2 rounded-[8px] border border-[var(--line)] bg-[var(--surface-2)] text-[13px] capitalize"
               >
                 {STATUSES.map((s) => (
