@@ -2,12 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InteractionRenderer } from "../interactions/InteractionRenderer";
-import { submitInteraction } from "@/lib/api";
 import type {
   SafeInteractiveElement,
   InteractionAnswer,
   SubmissionResult,
-  SessionSubmission,
 } from "../types";
 
 /**
@@ -58,7 +56,7 @@ function loadYouTubeApi(): Promise<void> {
   return ytApiPromise;
 }
 
-function extractYouTubeId(url: string): string | null {
+export function extractYouTubeId(url: string): string | null {
   try {
     const u = new URL(url);
     if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
@@ -75,11 +73,13 @@ function extractYouTubeId(url: string): string | null {
 type Props = {
   videoUrl: string;
   title: string;
-  scheduledSessionId: string;
   elements: SafeInteractiveElement[];
   requireCorrectAnswersToProgress: boolean;
-  /** Latest submission per element for this session — restores state on refresh */
-  initialSubmissions?: SessionSubmission[];
+  /** Owned by the session page — single source of truth for what's answered. */
+  results: Record<string, SubmissionResult>;
+  priorAnswers?: Record<string, Record<string, unknown>>;
+  submittingId?: string | null;
+  onSubmitElement: (elementId: string, answer: InteractionAnswer) => void;
 };
 
 /** How long the feedback banner stays up before the video auto-resumes. */
@@ -90,10 +90,12 @@ const POLL_INTERVAL_MS = 400;
 export function InteractiveVideoPlayer({
   videoUrl,
   title,
-  scheduledSessionId,
   elements,
   requireCorrectAnswersToProgress,
-  initialSubmissions = [],
+  results,
+  priorAnswers = {},
+  submittingId = null,
+  onSubmitElement,
 }: Props) {
   const containerId = useRef(
     `yt-player-${Math.random().toString(36).slice(2)}`
@@ -104,32 +106,6 @@ export function InteractiveVideoPlayer({
 
   const [ready, setReady] = useState(false);
   const [activeElementId, setActiveElementId] = useState<string | null>(null);
-  const [submittingId, setSubmittingId] = useState<string | null>(null);
-
-  const [results, setResults] = useState<Record<string, SubmissionResult>>(
-    () => {
-      const seed: Record<string, SubmissionResult> = {};
-      for (const s of initialSubmissions) {
-        seed[s.interactiveElementId] = {
-          isCorrect: s.isCorrect,
-          scoreAwarded: s.scoreAwarded,
-          attemptNumber: s.attemptNumber,
-        } as SubmissionResult;
-      }
-      return seed;
-    }
-  );
-
-  // Elements that already count as "cleared" and should not re-trigger.
-  const [triggered, setTriggered] = useState<Set<string>>(() => {
-    const done = new Set<string>();
-    for (const s of initialSubmissions) {
-      if (s.isCorrect || !requireCorrectAnswersToProgress) {
-        done.add(s.interactiveElementId);
-      }
-    }
-    return done;
-  });
 
   const videoId = useMemo(() => extractYouTubeId(videoUrl), [videoUrl]);
 
@@ -142,6 +118,14 @@ export function InteractiveVideoPlayer({
             (a.videoTimestampSeconds ?? 0) - (b.videoTimestampSeconds ?? 0)
         ),
     [elements]
+  );
+
+  const isCleared = useCallback(
+    (id: string) => {
+      const r = results[id];
+      return !!r && (r.isCorrect || !requireCorrectAnswersToProgress);
+    },
+    [results, requireCorrectAnswersToProgress]
   );
 
   const clearPoll = useCallback(() => {
@@ -188,8 +172,7 @@ export function InteractiveVideoPlayer({
 
       const currentTime = player.getCurrentTime();
       const next = checkpoints.find(
-        (e) =>
-          !triggered.has(e.id) && currentTime >= (e.videoTimestampSeconds ?? 0)
+        (e) => !isCleared(e.id) && currentTime >= (e.videoTimestampSeconds ?? 0)
       );
 
       if (next) {
@@ -201,45 +184,28 @@ export function InteractiveVideoPlayer({
     }, POLL_INTERVAL_MS);
 
     return clearPoll;
-  }, [ready, checkpoints, triggered, activeElementId, clearPoll]);
+  }, [ready, checkpoints, isCleared, activeElementId, clearPoll]);
 
-  function resumePlayback() {
-    setActiveElementId(null);
-    playerRef.current?.playVideo();
-  }
+  // React to the parent's results updating (i.e. handleSubmit resolved).
+  useEffect(() => {
+    if (!activeElementId) return;
+    if (!isCleared(activeElementId)) return; // still wrong + must retry — stay paused
 
-  async function handleSubmit(elementId: string, answer: InteractionAnswer) {
-    setSubmittingId(elementId);
-    try {
-      const result = (await submitInteraction({
-        interactiveElementId: elementId,
-        scheduledSessionId,
-        response: answer as Record<string, unknown>,
-      })) as SubmissionResult;
+    advanceTimerRef.current = window.setTimeout(() => {
+      setActiveElementId(null);
+      playerRef.current?.playVideo();
+    }, AUTO_ADVANCE_DELAY_MS);
 
-      setResults((prev) => ({ ...prev, [elementId]: result }));
-
-      const satisfied = result.isCorrect || !requireCorrectAnswersToProgress;
-      if (satisfied) {
-        setTriggered((prev) => new Set(prev).add(elementId));
-        advanceTimerRef.current = window.setTimeout(
-          resumePlayback,
-          AUTO_ADVANCE_DELAY_MS
-        );
+    return () => {
+      if (advanceTimerRef.current != null) {
+        window.clearTimeout(advanceTimerRef.current);
       }
-      // If correctness is required and the answer was wrong, we deliberately
-      // leave activeElementId set — InteractionRenderer shows the retry
-      // button and handleSubmit runs again on the next attempt.
-    } finally {
-      setSubmittingId(null);
-    }
-  }
+    };
+  }, [results, activeElementId, isCleared]);
 
   const activeElement = checkpoints.find((e) => e.id === activeElementId);
   const activeResult = activeElement ? results[activeElement.id] : undefined;
-  const activeSatisfied =
-    !!activeResult &&
-    (activeResult.isCorrect || !requireCorrectAnswersToProgress);
+  const activeSatisfied = !!activeElement && isCleared(activeElement.id);
 
   return (
     <div className="space-y-3">
@@ -262,12 +228,15 @@ export function InteractiveVideoPlayer({
               <InteractionRenderer
                 element={activeElement}
                 result={activeResult}
+                initialAnswer={priorAnswers[activeElement.id] ?? null}
                 allowRetry={
                   requireCorrectAnswersToProgress &&
                   activeResult?.isCorrect === false
                 }
                 submitting={submittingId === activeElement.id}
-                onSubmit={(answer) => handleSubmit(activeElement.id, answer)}
+                onSubmit={(answer) =>
+                  onSubmitElement(activeElement.id, answer)
+                }
               />
               {activeSatisfied && (
                 <p className="mt-3 text-[11.5px] font-semibold text-[var(--ink-4)]">
@@ -281,7 +250,8 @@ export function InteractiveVideoPlayer({
 
       {checkpoints.length > 0 && (
         <p className="text-[11.5px] text-[var(--ink-4)] font-semibold">
-          {triggered.size}/{checkpoints.length} checkpoint
+          {checkpoints.filter((c) => isCleared(c.id)).length}/
+          {checkpoints.length} checkpoint
           {checkpoints.length === 1 ? "" : "s"} cleared
         </p>
       )}

@@ -15,7 +15,10 @@ import type {
   InteractionAnswer,
   SessionSubmission,
 } from "@/components/learning/types";
-import { ResourceRenderer } from "@/components/learning/resources/ResourceRenderer";
+import {
+  ResourceRenderer,
+  resourceHasVideoCheckpoints,
+} from "@/components/learning/resources/ResourceRenderer";
 import { InteractionRenderer } from "@/components/learning/interactions/InteractionRenderer";
 import {
   ArrowLeft,
@@ -90,6 +93,12 @@ export default function StudentSessionPage() {
 
   const activeResource =
     resources.find((r) => r.id === activeResourceId) ?? resources[0] ?? null;
+
+  // Video resources with timestamped checkpoints render their own elements
+  // as popups inside ResourceRenderer — skip the separate list below for those.
+  const activeHandledInternally = activeResource
+    ? resourceHasVideoCheckpoints(activeResource)
+    : false;
 
   const allElementIds = useMemo(() => {
     if (!data) return [] as string[];
@@ -218,8 +227,6 @@ export default function StudentSessionPage() {
 
   const { session, topic, isOverdue } = data;
 
-  console.log(activeResource?.resourceType, activeResource?.interactiveElements);
-
   return (
     <Shell>
       <main className="relative z-10 max-w-4xl mx-auto px-6 py-8">
@@ -312,54 +319,57 @@ export default function StudentSessionPage() {
                 </div>
 
                 <div className="px-5 py-5">
-                  <ResourceRenderer resource={activeResource} />
+                  <ResourceRenderer
+                    resource={activeResource}
+                    requireCorrectAnswersToProgress={requireCorrect}
+                    results={results}
+                    priorAnswers={priorAnswers}
+                    submittingId={submittingId}
+                    onSubmitElement={handleSubmit}
+                  />
 
-                  {/* {(activeResource.interactiveElements || []).map((el) => {
-                    const result = results[el.id];
-                    const allowRetry =
-                      requireCorrect &&
-                      result != null &&
-                      result.isCorrect === false;
+                  {/*
+                    Video resources with timestamped checkpoints render their
+                    elements as popups inside ResourceRenderer above — don't
+                    render them again here. Every other resource type (article,
+                    pdf, quiz, plain video, etc.) still lists its checks below.
+                  */}
+                  {!activeHandledInternally && (
+                    <>
+                      {(activeResource.interactiveElements || []).map((el) => {
+                        const result = results[el.id];
+                        const allowRetry =
+                          requireCorrect &&
+                          result != null &&
+                          result.isCorrect === false;
 
-                    return (
-                      <InteractionRenderer
-                        key={el.id}
-                        element={el}
-                        result={result}
-                        initialAnswer={priorAnswers[el.id] ?? null}
-                        allowRetry={allowRetry}
-                        submitting={submittingId === el.id}
-                        onSubmit={(payload) => handleSubmit(el.id, payload)}
-                      />
-                    );
-                  })} */}
-                    {(activeResource.interactiveElements || []).map((el) => {
-                      const result = results[el.id];
-                      const allowRetry =
-                        requireCorrect && result != null && result.isCorrect === false;
-
-                      return (
-                        <div key={el.id} className="mt-2">
-                          {el.videoTimestampSeconds != null && (
-                            <p className="text-[11px] font-bold text-[var(--brand)] mb-1">
-                              Checkpoint @ {el.videoTimestampSeconds}s
-                            </p>
-                          )}
-                          <InteractionRenderer
-                            element={el}
-                            result={result}
-                            initialAnswer={priorAnswers[el.id] ?? null}
-                            allowRetry={allowRetry}
-                            submitting={submittingId === el.id}
-                            onSubmit={(payload) => handleSubmit(el.id, payload)}
-                          />
-                        </div>
-                      );
-                    })}
-                  {(activeResource.interactiveElements || []).length === 0 && (
-                    <p className="mt-4 text-[13px] text-[var(--ink-3)]">
-                      No interactive checks on this part.
-                    </p>
+                        return (
+                          <div key={el.id} className="mt-2">
+                            {el.videoTimestampSeconds != null && (
+                              <p className="text-[11px] font-bold text-[var(--brand)] mb-1">
+                                Checkpoint @ {el.videoTimestampSeconds}s
+                              </p>
+                            )}
+                            <InteractionRenderer
+                              element={el}
+                              result={result}
+                              initialAnswer={priorAnswers[el.id] ?? null}
+                              allowRetry={allowRetry}
+                              submitting={submittingId === el.id}
+                              onSubmit={(payload) =>
+                                handleSubmit(el.id, payload)
+                              }
+                            />
+                          </div>
+                        );
+                      })}
+                      {(activeResource.interactiveElements || []).length ===
+                        0 && (
+                        <p className="mt-4 text-[13px] text-[var(--ink-3)]">
+                          No interactive checks on this part.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
