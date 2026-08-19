@@ -9,6 +9,7 @@ import type {
   HotspotConfig,
   DragAndDropConfig,
   ImageSequencingConfig,
+  FileUploadConfig,
   SubmissionResult,
 } from "../types";
 import { MultipleChoice } from "./MultipleChoice";
@@ -18,6 +19,7 @@ import { Branching } from "./Branching";
 import { Hotspot } from "./Hotspot";
 import { DragAndDrop } from "./DragAndDrop";
 import { ImageSequencing } from "./ImageSequencing";
+import { FileUpload } from "./Fileupload";
 import { cn } from "@/lib/utils";
 import { Loader2, Send, CheckCircle2, XCircle } from "lucide-react";
 
@@ -40,6 +42,7 @@ const SUPPORTED = new Set([
   "image_sequencing",
   "multiple_choice",
   "interactive_video",
+  "file_upload",
 ]);
 
 export function InteractionRenderer({
@@ -130,6 +133,15 @@ export function InteractionRenderer({
         />
       )}
 
+      {type === "file_upload" && (
+        <FileUpload
+          config={cfg as FileUploadConfig}
+          disabled={disabled}
+          initialAnswer={initialAnswer}
+          onReady={setAnswer}
+        />
+      )}
+
       {!SUPPORTED.has(String(type)) && (
         <div className="rounded-[12px] border border-dashed border-[var(--line)] px-4 py-5 text-[13px] text-[var(--ink-3)]">
           Renderer for <strong className="text-[var(--ink-2)]">{type}</strong>{" "}
@@ -169,7 +181,7 @@ export function InteractionRenderer({
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                Submit answer
+                {type === "file_upload" ? "Submit work" : "Submit answer"}
               </>
             )}
           </button>
@@ -191,8 +203,12 @@ export function InteractionRenderer({
             )}
             <span>
               {result.isCorrect
-                ? `Correct · +${result.scoreAwarded} pts`
-                : `Not quite · ${result.scoreAwarded} pts`}
+                ? type === "file_upload"
+                  ? "Submitted — your educator will review it"
+                  : `Correct · +${result.scoreAwarded} pts`
+                : type === "file_upload"
+                  ? "Nothing submitted yet"
+                  : `Not quite · ${result.scoreAwarded} pts`}
             </span>
           </div>
         )}

@@ -207,6 +207,12 @@ export type StudentDashboardSummary = {
   };
 };
 
+export type FileUploadConfig = {
+  instructions?: string;
+  allowFile?: boolean;
+  allowText?: boolean;
+};
+
 /* ---------- Submit payload shapes (student → API) ---------- */
 
 export type FillBlankAnswer = Record<string, string>; // { blank1: "figurative", blank2: "rhetorical" }

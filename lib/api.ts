@@ -151,6 +151,34 @@ export async function submitInteraction(payload: {
   });
 }
 
+
+/* ============================================================
+   STUDENT — Files (submission uploads)
+   Add this block under the "STUDENT — Payments & report" section
+   in lib/api.ts.
+   ============================================================ */
+ 
+export type PresignedUploadResponse = {
+  uploadUrl: string;
+  publicUrl: string;
+  key: string;
+};
+ 
+export async function getStudentPresignedUploadUrl(
+  fileName: string,
+  contentType: string
+) {
+  return api<PresignedUploadResponse>(
+    "/api/students/me/files/presigned-upload-url",
+    {
+      method: "POST",
+      body: { fileName, contentType },
+      skipAuthRedirect: false,
+    }
+  );
+}
+ 
+
 /* ============================================================
    STUDENT — Payments & report
    ============================================================ */

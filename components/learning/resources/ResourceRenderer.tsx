@@ -156,6 +156,19 @@ export function ResourceRenderer({
     );
   }
 
+  if (type === "submission") {
+    return (
+      <div className="space-y-2">
+        <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)]">
+          {resource.title}
+        </h2>
+        <p className="text-[13px] text-[var(--ink-3)]">
+          Upload your work for today below.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)]">
