@@ -177,6 +177,48 @@ export async function getStudentPresignedUploadUrl(
     }
   );
 }
+
+export async function getStudentBatchPresignedUploadUrls(
+  files: { fileName: string; contentType: string }[]
+) {
+  return api<{ files: PresignedUploadResponse[] }>(
+    "/api/students/me/files/presigned-upload-urls",
+    {
+      method: "POST",
+      body: { files },
+      skipAuthRedirect: false,
+    }
+  );
+}
+ 
+export type FileHistoryFile = {
+  id: string;
+  response: Record<string, unknown>;
+  attemptNumber: number;
+  submittedAt: string;
+  resourceId: string | null;
+  resourceTitle: string | null;
+};
+ 
+export type FileHistorySession = {
+  sessionId: string | null;
+  scheduledDate: string | null;
+  sessionDayNumber: number | null;
+  files: FileHistoryFile[];
+};
+ 
+export type FileHistoryTopicGroup = {
+  topicId: string | null;
+  topicTitle: string | null;
+  sessions: FileHistorySession[];
+};
+ 
+export async function getStudentFileHistory() {
+  return api<FileHistoryTopicGroup[]>("/api/students/me/files/history", {
+    skipAuthRedirect: false,
+  });
+}
+ 
  
 
 /* ============================================================
