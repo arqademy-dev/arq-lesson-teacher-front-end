@@ -151,6 +151,41 @@ export async function submitInteraction(payload: {
   });
 }
 
+/* ============================================================
+   STUDENT — Own learning plan breakdown
+   Add this block under the "STUDENT — Daily workflow" section
+   in lib/api.ts.
+   ============================================================ */
+
+export type LearningPlanBreakdownSession = {
+  id: string;
+  scheduledDate: string;
+  sessionDayNumber: number;
+  isCompleted: boolean;
+};
+
+export type LearningPlanBreakdownTopic = {
+  topicId: string;
+  topicTitle: string;
+  status: "pending" | "in_progress" | "completed";
+  done: LearningPlanBreakdownSession[];
+  todo: LearningPlanBreakdownSession[];
+};
+
+export type LearningPlanBreakdownPlan = {
+  planId: string;
+  status: string;
+  startDate: string;
+  endDate: string | null;
+  requireCorrectAnswersToProgress: boolean;
+  topics: LearningPlanBreakdownTopic[];
+};
+
+export async function getMyLearningPlanBreakdown() {
+  return api<LearningPlanBreakdownPlan[]>("/api/students/me/learning-plan", {
+    skipAuthRedirect: false,
+  });
+}
 
 /* ============================================================
    STUDENT — Files (submission uploads)
@@ -225,21 +260,24 @@ export async function getStudentFileHistory() {
    STUDENT — Payments & report
    ============================================================ */
 
+export type StudentPayment = {
+  id: string;
+  studentId?: string;
+  learningPlanId?: string;
+  pricingTierId?: string;
+  amountNaira?: number;
+  status: "pending" | "success" | "failed" | "refunded";
+  provider?: string | null;
+  providerReference?: string | null;
+  paidAt?: string | null;
+  createdAt?: string;
+};
+
+/** Create invoice — price computed server-side from topic count */
 export async function initiateStudentPayment(learningPlanId: string) {
   return api<{
     message?: string;
-    payment?: {
-      id: string;
-      studentId?: string;
-      learningPlanId?: string;
-      pricingTierId?: string;
-      amountNaira?: number;
-      status?: string;
-      provider?: string | null;
-      providerReference?: string | null;
-      paidAt?: string | null;
-      createdAt?: string;
-    };
+    payment?: StudentPayment;
     redirectUrl?: string | null;
   }>("/api/students/payments/initiate", {
     method: "POST",
@@ -249,7 +287,9 @@ export async function initiateStudentPayment(learningPlanId: string) {
 }
 
 export async function listStudentPayments() {
-  return api("/api/students/payments/me", { skipAuthRedirect: false });
+  return api<StudentPayment[]>("/api/students/payments/me", {
+    skipAuthRedirect: false,
+  });
 }
 
 export async function getStudentReport() {
@@ -619,23 +659,28 @@ export async function deleteSubject(id: string) {
    ADMIN — Curriculum: Classes
    ============================================================ */
 
-export async function listClasses(subjectId: string) {
-  return api(`/api/admin/curriculum/subjects/${subjectId}/classes`, {
-    skipAuthRedirect: false,
-  });
+export async function listClasses() {
+  return api("/api/admin/curriculum/classes", { skipAuthRedirect: false });
 }
-
-export async function createClass(
-  subjectId: string,
-  body: { title: string; term?: string; isActive?: boolean }
-) {
-  return api(`/api/admin/curriculum/subjects/${subjectId}/classes`, {
+ 
+export async function createClass(body: {
+  title: string;
+  term?: string;
+  isActive?: boolean;
+}) {
+  return api("/api/admin/curriculum/classes", {
     method: "POST",
     body,
     skipAuthRedirect: false,
   });
 }
-
+ 
+export async function getClass(id: string) {
+  return api(`/api/admin/curriculum/classes/${id}`, {
+    skipAuthRedirect: false,
+  });
+}
+ 
 export async function updateClass(
   id: string,
   body: { title?: string; term?: string; isActive?: boolean }
@@ -646,43 +691,60 @@ export async function updateClass(
     skipAuthRedirect: false,
   });
 }
-
+ 
 export async function deleteClass(id: string) {
   return api(`/api/admin/curriculum/classes/${id}`, {
     method: "DELETE",
     skipAuthRedirect: false,
   });
 }
-
+ 
 /* ============================================================
    ADMIN — Curriculum: Topics
    ============================================================ */
+   export type TopicFilters = { subjectId?: string; classId?: string };
 
-export async function listTopics(classId: string) {
-  return api(`/api/admin/curriculum/classes/${classId}/topics`, {
+
+function topicsQuery(filters: TopicFilters): string {
+  const params = new URLSearchParams();
+  if (filters.subjectId) params.set("subjectId", filters.subjectId);
+  if (filters.classId) params.set("classId", filters.classId);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+ 
+export async function listTopics(filters: TopicFilters = {}) {
+  return api(`/api/admin/curriculum/topics${topicsQuery(filters)}`, {
     skipAuthRedirect: false,
   });
 }
-
-export async function createTopic(
-  classId: string,
-  body: {
-    title: string;
-    description?: string;
-    sortOrder: number;
-    expectedDurationDays: number;
-  }
-) {
-  return api(`/api/admin/curriculum/classes/${classId}/topics`, {
+ 
+export async function createTopic(body: {
+  subjectId: string;
+  classId: string;
+  title: string;
+  description?: string;
+  sortOrder: number;
+  expectedDurationDays: number;
+}) {
+  return api("/api/admin/curriculum/topics", {
     method: "POST",
     body,
     skipAuthRedirect: false,
   });
 }
-
+ 
+export async function getTopic(id: string) {
+  return api(`/api/admin/curriculum/topics/${id}`, {
+    skipAuthRedirect: false,
+  });
+}
+ 
 export async function updateTopic(
   id: string,
   body: {
+    subjectId?: string;
+    classId?: string;
     title?: string;
     description?: string;
     sortOrder?: number;
@@ -695,7 +757,7 @@ export async function updateTopic(
     skipAuthRedirect: false,
   });
 }
-
+ 
 export async function deleteTopic(id: string) {
   return api(`/api/admin/curriculum/topics/${id}`, {
     method: "DELETE",
@@ -734,24 +796,38 @@ export async function getAdminDashboard() {
    at the call site)
    ============================================================ */
 
+
 export async function listCurriculumSubjects() {
   return api("/api/admin/curriculum/subjects", { skipAuthRedirect: false });
 }
-
-export async function listCurriculumClasses(subjectId: string) {
-  return api(`/api/admin/curriculum/subjects/${subjectId}/classes`, {
+ 
+export async function listCurriculumClasses() {
+  return api("/api/admin/curriculum/classes", { skipAuthRedirect: false });
+}
+ 
+export async function listCurriculumTopics(filters: TopicFilters) {
+  return api(`/api/admin/curriculum/topics${topicsQuery(filters)}`, {
     skipAuthRedirect: false,
   });
 }
-
-export async function listCurriculumTopics(classId: string) {
-  return api(`/api/admin/curriculum/classes/${classId}/topics`, {
-    skipAuthRedirect: false,
-  });
-}
-
+ 
 export async function listCurriculumResources(topicId: string) {
   return api(`/api/admin/curriculum/topics/${topicId}/resources`, {
     skipAuthRedirect: false,
   });
 }
+
+/* ============================================================
+   STUDENT — Payments (typed)
+   Replaces initiateStudentPayment and listStudentPayments in
+   lib/api.ts. Two real fixes here, not just typing:
+   - Both had skipAuthRedirect: true, which was wrong — that flag
+     should only be true on the three *login* mutations (a 401
+     there means "wrong password", not "your session expired").
+     Payment calls need the normal expired-session → login redirect
+     like everything else.
+   - listStudentPayments now returns a typed StudentPayment[]
+     instead of unknown, so callers can check .status and
+     .learningPlanId without casting.
+   ============================================================ */
+

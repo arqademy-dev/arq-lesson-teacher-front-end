@@ -6,7 +6,6 @@ import {
   getStudentDashboard,
   getStudentMe,
   ApiError,
-  studentLogout,
 } from "@/lib/api";
 import type { StudentDashboardSummary } from "@/components/learning/types";
 import {
@@ -74,14 +73,6 @@ export default function StudentDashboardPage() {
       ? `${me.firstName ?? ""} ${me.lastName ?? ""}`.trim()
       : null;
 
-  async function handleLogout() {
-  try {
-    await studentLogout();
-  } finally {
-    window.location.href = "/students/login";
-  }
-}
-
   return (
     <div className="relative min-h-screen">
       <div className="bg-grid" />
@@ -99,7 +90,6 @@ export default function StudentDashboardPage() {
         <Link
           href="/students/login"
           className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[var(--ink-2)] hover:text-[var(--brand)]"
-          onClick={handleLogout}
         >
           <LogOut className="w-4 h-4" />
           Sign out
@@ -142,35 +132,6 @@ export default function StudentDashboardPage() {
           <>
             {/* Student profile card */}
             <section className="mt-8 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
-              
-              {/* If no successful payment, primary CTA goes to payments */}
-              {payments && !payments.hasSuccessfulPayment ? (
-                <Link
-                  href="/students/payments"
-                  className={cn(
-                    "mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
-                    "bg-[var(--danger)] text-white hover:opacity-90 mx-2 w-auto"
-                  )}
-                >
-                  <CreditCard className="w-4 h-4" />
-                  Unlock with payment
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              ) : (
-                // <Link
-                //   href="/students/session"
-                //   className={cn(
-                //     "mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
-                //     "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)]"
-                //   )}
-                // >
-                //   <BookOpen className="w-4 h-4" />
-                //   {session?.isOverdue ? "Continue catch-up session" : "Go to today's session"}
-                //   <ArrowRight className="w-4 h-4" />
-                // </Link>
-                ""
-              )}
-
               <div className="px-5 py-4 border-b border-[var(--line-soft)] flex items-center gap-3">
                 <div className="w-11 h-11 rounded-[11px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)] flex-none">
                   {fullName ? (
@@ -256,19 +217,39 @@ export default function StudentDashboardPage() {
                         {topic.description}
                       </p>
                     )}
-                    <Link
-                      href="/students/session"
-                      className={cn(
-                        "mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
-                        "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)] transition-colors"
-                      )}
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      {session.isOverdue
-                        ? "Continue catch-up session"
-                        : "Go to today's session"}
-                      <ArrowRight className="w-4 h-4" />
-                    </Link>
+
+                    {/* CTA reflects real payment status — a session existing
+                        doesn't mean it's actually reachable yet. */}
+                    {payments?.hasSuccessfulPayment ? (
+                      <Link
+                        href="/students/learning-plan"
+                        className={cn(
+                          "mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
+                          "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)] transition-colors"
+                        )}
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        Continue learning
+                        <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    ) : payments?.hasPendingPayment ? (
+                      <div className="mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold bg-[var(--warn-soft)] text-[var(--warn)]">
+                        <CreditCard className="w-4 h-4" />
+                        Payment pending approval
+                      </div>
+                    ) : (
+                      <Link
+                        href="/students/learning-plan"
+                        className={cn(
+                          "mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
+                          "bg-[var(--danger)] text-white hover:opacity-90 transition-opacity"
+                        )}
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        Make payment to unlock
+                        <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    )}
                   </>
                 ) : (
                   <p className="text-[13px] text-[var(--ink-3)]">

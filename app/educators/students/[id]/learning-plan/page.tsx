@@ -74,7 +74,7 @@ export default function AssignLearningPlanPage() {
 
   const [subjects, setSubjects] = useState<Record<string, unknown>[]>([]);
   const [classes, setClasses] = useState<Record<string, unknown>[]>([]);
-  const [topicsInClass, setTopicsInClass] = useState<TopicRow[]>([]);
+  const [topicsForSelection, setTopicsForSelection] = useState<TopicRow[]>([]);
   const [subjectId, setSubjectId] = useState("");
   const [classId, setClassId] = useState("");
   const [picked, setPicked] = useState<Record<string, TopicRow>>({});
@@ -117,9 +117,17 @@ export default function AssignLearningPlanPage() {
               String(st.id ?? studentId)
           );
         }
-        const subs = await listCurriculumSubjects();
+
+        // Subjects and classes are both flat/independent now — load together.
+        const [subs, cls] = await Promise.all([
+          listCurriculumSubjects(),
+          listCurriculumClasses(),
+        ]);
         setSubjects(
           Array.isArray(subs) ? (subs as Record<string, unknown>[]) : []
+        );
+        setClasses(
+          Array.isArray(cls) ? (cls as Record<string, unknown>[]) : []
         );
 
         // duplicate-plan gate: does this student already have a blocking plan?
@@ -152,37 +160,17 @@ export default function AssignLearningPlanPage() {
     })();
   }, [studentId]);
 
-  // Subject → classes
-  useEffect(() => {
-    if (!subjectId) {
-      setClasses([]);
-      setClassId("");
-      setTopicsInClass([]);
-      return;
-    }
-    listCurriculumClasses(subjectId)
-      .then((c) => {
-        setClasses(Array.isArray(c) ? (c as Record<string, unknown>[]) : []);
-        setClassId("");
-        setTopicsInClass([]);
-      })
-      .catch((err) => {
-        setClasses([]);
-        setError(
-          err instanceof Error ? err.message : "Could not load classes"
-        );
-      });
-  }, [subjectId]);
-
-  // Class → topics for that class
-  const loadClassTopics = useCallback(async () => {
-    if (!classId || !subjectId) {
-      setTopicsInClass([]);
+  // Subject AND class → topics. Both are required now (a topic is uniquely
+  // identified by the subjectId + classId combination), so nothing loads
+  // until both are picked.
+  const loadTopics = useCallback(async () => {
+    if (!subjectId || !classId) {
+      setTopicsForSelection([]);
       return;
     }
     setLoadingTopics(true);
     try {
-      const t = await listCurriculumTopics(classId);
+      const t = await listCurriculumTopics({ subjectId, classId });
       const list = Array.isArray(t) ? (t as Record<string, unknown>[]) : [];
       const subjectTitle = String(
         subjects.find((s) => String(s.id) === subjectId)?.title ?? ""
@@ -190,7 +178,7 @@ export default function AssignLearningPlanPage() {
       const classTitle = String(
         classes.find((c) => String(c.id) === classId)?.title ?? ""
       );
-      setTopicsInClass(
+      setTopicsForSelection(
         list.map((row) => ({
           id: String(row.id),
           title: String(row.title ?? "Topic"),
@@ -201,16 +189,16 @@ export default function AssignLearningPlanPage() {
         }))
       );
     } catch (err) {
-      setTopicsInClass([]);
+      setTopicsForSelection([]);
       setError(err instanceof Error ? err.message : "Could not load topics");
     } finally {
       setLoadingTopics(false);
     }
-  }, [classId, subjectId, subjects, classes]);
+  }, [subjectId, classId, subjects, classes]);
 
   useEffect(() => {
-    loadClassTopics();
-  }, [loadClassTopics]);
+    loadTopics();
+  }, [loadTopics]);
 
   const pickedList = useMemo(() => Object.values(picked), [picked]);
 
@@ -271,6 +259,9 @@ export default function AssignLearningPlanPage() {
     }
   }
 
+  const selectedSubjectTitle = String(
+    subjects.find((s) => String(s.id) === subjectId)?.title ?? ""
+  );
   const selectedClassTitle = String(
     classes.find((c) => String(c.id) === classId)?.title ?? ""
   );
@@ -378,15 +369,16 @@ export default function AssignLearningPlanPage() {
         !loading &&
         !checkingExisting && (
           <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-            {/* Class + topics */}
+            {/* Subject + class + topics */}
             <section className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
               <div className="px-4 py-3 border-b border-[var(--line-soft)]">
                 <p className="font-heading text-[13px] font-semibold text-[var(--ink)]">
-                  Select class & topics
+                  Select subject, class & topics
                 </p>
                 <p className="text-[11.5px] text-[var(--ink-3)] mt-0.5">
-                  Choose a class to load its topics. Change class anytime to add
-                  topics from another class into the same plan.
+                  Subject and class are independent — pick both to load their
+                  topics. Change either anytime to add topics from a
+                  different combination into the same plan.
                 </p>
               </div>
 
@@ -412,8 +404,7 @@ export default function AssignLearningPlanPage() {
                   <select
                     value={classId}
                     onChange={(e) => setClassId(e.target.value)}
-                    disabled={!subjectId}
-                    className="mt-1 w-full h-10 px-2 rounded-[8px] border border-[var(--line)] bg-[var(--surface-2)] text-[13px] text-[var(--ink)] disabled:opacity-50"
+                    className="mt-1 w-full h-10 px-2 rounded-[8px] border border-[var(--line)] bg-[var(--surface-2)] text-[13px] text-[var(--ink)]"
                   >
                     <option value="">Select class…</option>
                     {classes.map((c) => (
@@ -426,25 +417,29 @@ export default function AssignLearningPlanPage() {
                 </label>
               </div>
 
-              {classId && (
+              {subjectId && classId && (
                 <div className="px-4 py-2 bg-[var(--brand-soft)] text-[12px] font-bold text-[var(--brand)]">
-                  Topics in {selectedClassTitle || "this class"}
+                  Topics in {selectedSubjectTitle || "this subject"} ·{" "}
+                  {selectedClassTitle || "this class"}
                   {loadingTopics && " · loading…"}
                 </div>
               )}
 
               <ul className="max-h-[380px] overflow-y-auto">
-                {!classId && (
+                {(!subjectId || !classId) && (
                   <li className="px-4 py-10 text-center text-[13px] text-[var(--ink-3)]">
-                    Select a class to see its topics.
+                    Select a subject and a class to see their topics.
                   </li>
                 )}
-                {classId && !loadingTopics && topicsInClass.length === 0 && (
-                  <li className="px-4 py-10 text-center text-[13px] text-[var(--ink-3)]">
-                    No topics in this class yet.
-                  </li>
-                )}
-                {topicsInClass.map((t) => {
+                {subjectId &&
+                  classId &&
+                  !loadingTopics &&
+                  topicsForSelection.length === 0 && (
+                    <li className="px-4 py-10 text-center text-[13px] text-[var(--ink-3)]">
+                      No topics for this subject and class yet.
+                    </li>
+                  )}
+                {topicsForSelection.map((t) => {
                   const on = !!picked[t.id];
                   return (
                     <li key={t.id}>

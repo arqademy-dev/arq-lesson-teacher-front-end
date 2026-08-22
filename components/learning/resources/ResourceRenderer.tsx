@@ -17,6 +17,10 @@ function isYouTubeUrl(url: string): boolean {
   return url.includes("youtube.com") || url.includes("youtu.be");
 }
 
+function isPdfUrl(url: string): boolean {
+  return url.toLowerCase().includes(".pdf");
+}
+
 /**
  * True when this resource's interactive elements should render as
  * timestamp-triggered popups inside the video player itself, rather
@@ -157,11 +161,47 @@ export function ResourceRenderer({
   }
 
   if (type === "submission") {
+    const url = resource.urlOrPath || "";
+    const hasUrl = !!url && url !== "string";
+    const isYouTube = hasUrl && isYouTubeUrl(url);
+    const isPdf = hasUrl && !isYouTube && isPdfUrl(url);
+
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
         <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)]">
           {resource.title}
         </h2>
+
+        {isYouTube && (
+          <div className="relative w-full overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--navy)] aspect-video">
+            <iframe
+              src={toYouTubeEmbed(url)}
+              title={resource.title}
+              className="absolute inset-0 w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
+
+        {isPdf && (
+          <div className="space-y-2">
+            <iframe
+              src={url}
+              title={resource.title}
+              className="w-full h-[420px] rounded-[12px] border border-[var(--line)] bg-[var(--surface)]"
+            />
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[12.5px] font-bold text-[var(--brand)] hover:underline"
+            >
+              Open PDF in new tab →
+            </a>
+          </div>
+        )}
+
         <p className="text-[13px] text-[var(--ink-3)]">
           Upload your work for today below.
         </p>
