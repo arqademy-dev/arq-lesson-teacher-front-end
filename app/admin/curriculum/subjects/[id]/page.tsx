@@ -35,6 +35,8 @@ export default function AdminSubjectDetailPage() {
   const [topicTitle, setTopicTitle] = useState("");
   const [topicDays, setTopicDays] = useState(1);
 
+  // Classes are global now (shared across every subject) — load the whole
+  // list once, independent of which subject we're viewing.
   const loadSubject = useCallback(async () => {
     if (!subjectId) return;
     setLoading(true);
@@ -42,7 +44,7 @@ export default function AdminSubjectDetailPage() {
     try {
       const [s, c] = await Promise.all([
         getSubject(subjectId),
-        listClasses(subjectId),
+        listClasses(),
       ]);
       setSubject(s as Record<string, unknown>);
       const list = Array.isArray(c) ? (c as Record<string, unknown>[]) : [];
@@ -68,6 +70,8 @@ export default function AdminSubjectDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subjectId]);
 
+  // Topics now need BOTH this subject and the selected class — a topic is
+  // uniquely identified by that combination, not by class alone.
   useEffect(() => {
     if (!activeClassId) {
       setTopics([]);
@@ -75,18 +79,20 @@ export default function AdminSubjectDetailPage() {
     }
     (async () => {
       try {
-        const t = await listTopics(activeClassId);
+        const t = await listTopics({ subjectId, classId: activeClassId });
         setTopics(Array.isArray(t) ? (t as Record<string, unknown>[]) : []);
       } catch {
         setTopics([]);
       }
     })();
-  }, [activeClassId]);
+  }, [subjectId, activeClassId]);
 
   async function addClass(e: React.FormEvent) {
     e.preventDefault();
     if (!classTitle.trim()) return;
-    await createClass(subjectId, { title: classTitle.trim(), isActive: true });
+    // No subjectId — this creates a class available to every subject, not
+    // just this one.
+    await createClass({ title: classTitle.trim(), isActive: true });
     setClassTitle("");
     await loadSubject();
   }
@@ -94,14 +100,26 @@ export default function AdminSubjectDetailPage() {
   async function addTopic(e: React.FormEvent) {
     e.preventDefault();
     if (!activeClassId || !topicTitle.trim()) return;
-    await createTopic(activeClassId, {
+    await createTopic({
+      subjectId,
+      classId: activeClassId,
       title: topicTitle.trim(),
       sortOrder: topics.length + 1,
       expectedDurationDays: topicDays || 1,
     });
     setTopicTitle("");
-    const t = await listTopics(activeClassId);
+    const t = await listTopics({ subjectId, classId: activeClassId });
     setTopics(Array.isArray(t) ? (t as Record<string, unknown>[]) : []);
+  }
+
+  async function removeClass(id: string) {
+    const ok = confirm(
+      "This class is shared across every subject that uses it — deleting it removes its topics everywhere, not just here in this subject. Continue?"
+    );
+    if (!ok) return;
+    await deleteClass(id);
+    if (activeClassId === id) setActiveClassId(null);
+    await loadSubject();
   }
 
   async function openTopicResources(topicId: string) {
@@ -162,8 +180,14 @@ export default function AdminSubjectDetailPage() {
         <div className="grid gap-5 lg:grid-cols-2">
           {/* Classes */}
           <section className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
-            <div className="px-4 py-3 border-b border-[var(--line-soft)] font-heading text-[13px] font-semibold">
-              Classes
+            <div className="px-4 py-3 border-b border-[var(--line-soft)]">
+              <p className="font-heading text-[13px] font-semibold">
+                Classes
+              </p>
+              <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+                Shared across all subjects — pick one to browse or add topics
+                for {String(subject.title ?? "this subject")}.
+              </p>
             </div>
             <form
               onSubmit={addClass}
@@ -207,12 +231,9 @@ export default function AdminSubjectDetailPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={async () => {
-                        if (!confirm("Delete class?")) return;
-                        await deleteClass(id);
-                        await loadSubject();
-                      }}
+                      onClick={() => removeClass(id)}
                       className="p-1.5 text-[var(--danger)]"
+                      title="Delete class (affects every subject using it)"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -281,7 +302,10 @@ export default function AdminSubjectDetailPage() {
                       onClick={async () => {
                         if (!confirm("Delete topic?")) return;
                         await deleteTopic(id);
-                        const next = await listTopics(activeClassId!);
+                        const next = await listTopics({
+                          subjectId,
+                          classId: activeClassId!,
+                        });
                         setTopics(
                           Array.isArray(next)
                             ? (next as Record<string, unknown>[])
