@@ -12,12 +12,13 @@ import {
   BookOpen,
   Loader2,
   LogOut,
-  Target,
   TrendingUp,
   CreditCard,
   AlertTriangle,
   ArrowRight,
   User,
+  FolderOpen,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -65,7 +66,6 @@ export default function StudentDashboardPage() {
   const session = data?.currentSession;
   const topic = session?.topic;
   const progress = data?.progress;
-  const performance = data?.performance;
   const payments = data?.payments;
 
   const fullName =
@@ -104,7 +104,7 @@ export default function StudentDashboardPage() {
           {fullName ? `Welcome, ${me?.firstName?.trim()}` : "Welcome back"}
         </h1>
         <p className="mt-1.5 text-[13px] text-[var(--ink-3)]">
-          Your profile, progress, and today&apos;s session.
+          Your plan, progress, and next step.
         </p>
 
         {loading && (
@@ -130,243 +130,180 @@ export default function StudentDashboardPage() {
 
         {!loading && !error && (
           <>
-            {/* Student profile card */}
-            <section className="mt-8 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
-              <div className="px-5 py-4 border-b border-[var(--line-soft)] flex items-center gap-3">
-                <div className="w-11 h-11 rounded-[11px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)] flex-none">
-                  {fullName ? (
-                    <span className="font-heading font-semibold text-[14px]">
-                      {(me?.firstName?.[0] ?? "").toUpperCase()}
-                      {(me?.lastName?.[0] ?? "").toUpperCase()}
-                    </span>
-                  ) : (
-                    <User className="w-5 h-5" />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)] truncate">
-                    {fullName || "Student"}
-                  </h2>
-                  <p className="text-[12px] text-[var(--ink-3)] font-semibold mt-0.5">
-                    {[me?.arqId, me?.academicLevel].filter(Boolean).join(" · ") ||
-                      "Learner profile"}
-                  </p>
-                </div>
+            {/* Profile strip — compact */}
+            <section className="mt-8 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] px-5 py-4 flex items-center gap-3">
+              <div className="w-11 h-11 rounded-[11px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)] flex-none">
+                {fullName ? (
+                  <span className="font-heading font-semibold text-[14px]">
+                    {(me?.firstName?.[0] ?? "").toUpperCase()}
+                    {(me?.lastName?.[0] ?? "").toUpperCase()}
+                  </span>
+                ) : (
+                  <User className="w-5 h-5" />
+                )}
               </div>
-
-              <div className="px-5 py-4 grid gap-3 sm:grid-cols-2 text-[12.5px]">
-                <InfoRow label="Email" value={me?.email} />
-                <InfoRow label="Arq ID" value={me?.arqId} />
-                <InfoRow label="Academic level" value={me?.academicLevel} />
-                <InfoRow
-                  label="Enrolled"
-                  value={
-                    me?.enrollmentDate
-                      ? String(me.enrollmentDate)
-                      : undefined
-                  }
-                />
+              <div className="min-w-0">
+                <h2 className="font-heading text-[15px] font-semibold text-[var(--ink)] truncate">
+                  {fullName || "Student"}
+                </h2>
+                <p className="text-[12px] text-[var(--ink-3)] font-semibold mt-0.5">
+                  {[me?.arqId, me?.academicLevel].filter(Boolean).join(" · ") ||
+                    "Learner profile"}
+                </p>
               </div>
-
-              {/* If profile shape is unexpected, still show raw for debugging */}
-              {me && !me.firstName && !me.email && (
-                <details className="px-5 pb-4">
-                  <summary className="text-[11px] font-bold text-[var(--ink-4)] cursor-pointer">
-                    Raw profile JSON
-                  </summary>
-                  <pre className="mt-2 text-[11px] text-[var(--ink-3)] overflow-auto max-h-40">
-                    {JSON.stringify(me, null, 2)}
-                  </pre>
-                </details>
-              )}
             </section>
 
-
-            {/* Current session */}
+            {/* Primary CTA — always go through the learning plan */}
             <section className="mt-5 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
               <div className="px-5 py-4 border-b border-[var(--line-soft)] flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
-                    Current session
+                    Next step
                   </p>
                   <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)] mt-1">
-                    {topic?.title || "No active session"}
+                    {topic?.title || "Your learning plan"}
                   </h2>
                 </div>
                 {session?.isOverdue && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[var(--warn-soft)] text-[var(--warn)]">
                     <AlertTriangle className="w-3.5 h-3.5" />
-                    Catch-up
+                    Catch-up needed
                   </span>
                 )}
               </div>
 
               <div className="px-5 py-4 space-y-3">
                 {session && topic ? (
-                  <>
-                    <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-[var(--ink-3)] font-semibold">
-                      <span>Day {session.session.sessionDayNumber}</span>
-                      <span>Scheduled {session.session.scheduledDate}</span>
-                      <span>
-                        {session.resources?.length ?? 0} resource
-                        {(session.resources?.length ?? 0) === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                    {topic.description && topic.description !== "string" && (
-                      <p className="text-[13px] text-[var(--ink-2)] leading-relaxed">
-                        {topic.description}
-                      </p>
-                    )}
-
-                    {/* CTA reflects real payment status — a session existing
-                        doesn't mean it's actually reachable yet. */}
-                    {payments?.hasSuccessfulPayment ? (
-                      <Link
-                        href="/students/learning-plan"
-                        className={cn(
-                          "mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
-                          "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)] transition-colors"
-                        )}
-                      >
-                        <BookOpen className="w-4 h-4" />
-                        Continue learning
-                        <ArrowRight className="w-4 h-4" />
-                      </Link>
-                    ) : payments?.hasPendingPayment ? (
-                      <div className="mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold bg-[var(--warn-soft)] text-[var(--warn)]">
-                        <CreditCard className="w-4 h-4" />
-                        Payment pending approval
-                      </div>
-                    ) : (
-                      <Link
-                        href="/students/learning-plan"
-                        className={cn(
-                          "mt-2 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
-                          "bg-[var(--danger)] text-white hover:opacity-90 transition-opacity"
-                        )}
-                      >
-                        <CreditCard className="w-4 h-4" />
-                        Make payment to unlock
-                        <ArrowRight className="w-4 h-4" />
-                      </Link>
-                    )}
-                  </>
+                  <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-[var(--ink-3)] font-semibold">
+                    <span>Day {session.session.sessionDayNumber}</span>
+                    <span>Scheduled {session.session.scheduledDate}</span>
+                    <span>
+                      {session.resources?.length ?? 0} resource
+                      {(session.resources?.length ?? 0) === 1 ? "" : "s"}
+                    </span>
+                  </div>
                 ) : (
                   <p className="text-[13px] text-[var(--ink-3)]">
-                    You don&apos;t have an open session right now. Check with
-                    your educator if you expected one.
+                    Open your plan to see topics and sessions. Sessions unlock
+                    one at a time after you complete the previous one.
                   </p>
+                )}
+
+                {/* Payment-aware primary button */}
+                {payments?.hasSuccessfulPayment ? (
+                  <Link
+                    href="/students/learning-plan"
+                    className={cn(
+                      "mt-1 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
+                      "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)] transition-colors"
+                    )}
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    Continue learning
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                ) : payments?.hasPendingPayment ? (
+                  <div className="mt-1 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold bg-[var(--warn-soft)] text-[var(--warn)]">
+                    <CreditCard className="w-4 h-4" />
+                    Payment pending approval
+                  </div>
+                ) : (
+                  <Link
+                    href="/students/learning-plan"
+                    className={cn(
+                      "mt-1 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
+                      "bg-[var(--danger)] text-white hover:opacity-90 transition-opacity"
+                    )}
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    Make payment to unlock
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
                 )}
               </div>
             </section>
 
-            {/* Stats */}
-            <div className="mt-5 grid gap-4 sm:grid-cols-3">
-              <StatCard
-                icon={TrendingUp}
-                label="Progress"
-                value={`${progress?.percentComplete ?? 0}%`}
-                sub={`${progress?.completedTopics ?? 0} of ${progress?.totalTopics ?? 0} topics`}
-              />
-              <StatCard
-                icon={Target}
-                label="Accuracy"
-                value={`${performance?.accuracyPercent ?? 0}%`}
-                sub={`${performance?.correctSubmissions ?? 0}/${performance?.totalSubmissions ?? 0} correct`}
-              />
-              <StatCard
-                icon={CreditCard}
-                label="Payment"
-                value={
-                  payments?.hasSuccessfulPayment
+            {/* Two cards only: Progress (→ report) + Payment (→ payments) */}
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <Link
+                href="/students/report"
+                className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)] hover:border-[var(--brand)] transition-colors group"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-[8px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)]">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <span className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
+                    Progress
+                  </span>
+                </div>
+                <div className="font-heading text-[22px] font-semibold text-[var(--ink)]">
+                  {progress?.percentComplete ?? 0}%
+                </div>
+                <p className="mt-1 text-[11.5px] text-[var(--ink-3)] font-semibold">
+                  {progress?.completedTopics ?? 0} of{" "}
+                  {progress?.totalTopics ?? 0} topics
+                </p>
+                <p className="mt-2 text-[11.5px] font-bold text-[var(--brand)] group-hover:underline">
+                  View full assessment report →
+                </p>
+              </Link>
+
+              <Link
+                href="/students/payments"
+                className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)] hover:border-[var(--brand)] transition-colors group"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-[8px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)]">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <span className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
+                    Payment
+                  </span>
+                </div>
+                <div
+                  className={cn(
+                    "font-heading text-[22px] font-semibold",
+                    payments?.hasSuccessfulPayment
+                      ? "text-[var(--ok)]"
+                      : payments?.hasPendingPayment
+                        ? "text-[var(--warn)]"
+                        : "text-[var(--ink)]"
+                  )}
+                >
+                  {payments?.hasSuccessfulPayment
                     ? "Active"
                     : payments?.hasPendingPayment
                       ? "Pending"
-                      : "None"
-                }
-                sub={
-                  payments?.hasSuccessfulPayment
+                      : "None"}
+                </div>
+                <p className="mt-1 text-[11.5px] text-[var(--ink-3)] font-semibold">
+                  {payments?.hasSuccessfulPayment
                     ? "Plan unlocked"
                     : payments?.hasPendingPayment
                       ? "Awaiting approval"
-                      : "No payment on file"
-                }
-                tone={
-                  payments?.hasSuccessfulPayment
-                    ? "ok"
-                    : payments?.hasPendingPayment
-                      ? "warn"
-                      : "muted"
-                }
-              />
+                      : "No payment on file"}
+                </p>
+                <p className="mt-2 text-[11.5px] font-bold text-[var(--brand)] group-hover:underline">
+                  View payments →
+                </p>
+              </Link>
             </div>
 
+            {/* Light files entry — only useful for students who actually upload */}
             <div className="mt-5">
               <Link
-                href="/students/report"
-                className="text-[12.5px] font-bold text-[var(--brand)] hover:underline"
+                href="/students/files"
+                className="inline-flex items-center gap-2 text-[12.5px] font-bold text-[var(--ink-2)] hover:text-[var(--brand)]"
               >
-                View full assessment report →
+                <FolderOpen className="w-4 h-4" />
+                My uploaded work
+                <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </div>
           </>
         )}
       </main>
-    </div>
-  );
-}
-
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string | null;
-}) {
-  return (
-    <div className="flex justify-between gap-3 border-b border-[var(--line-soft)] pb-2 last:border-0">
-      <span className="text-[var(--ink-3)] font-semibold">{label}</span>
-      <span className="font-bold text-[var(--ink)] text-right truncate max-w-[60%]">
-        {value && String(value).trim() ? String(value) : "—"}
-      </span>
-    </div>
-  );
-}
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-  tone = "default",
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  sub: string;
-  tone?: "default" | "ok" | "warn" | "muted";
-}) {
-  const valueColor =
-    tone === "ok"
-      ? "text-[var(--ok)]"
-      : tone === "warn"
-        ? "text-[var(--warn)]"
-        : "text-[var(--ink)]";
-
-  return (
-    <div className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
-      <div className="flex items-center gap-2 mb-2">
-        <div className="w-8 h-8 rounded-[8px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)]">
-          <Icon className="w-4 h-4" />
-        </div>
-        <span className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
-          {label}
-        </span>
-      </div>
-      <div className={cn("font-heading text-[22px] font-semibold", valueColor)}>
-        {value}
-      </div>
-      <p className="mt-1 text-[11.5px] text-[var(--ink-3)] font-semibold">{sub}</p>
     </div>
   );
 }

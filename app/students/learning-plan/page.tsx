@@ -31,9 +31,6 @@ type StudentMe = {
   lastName?: string;
   arqId?: string;
   academicLevel?: string | null;
-  // Assumption: backend embeds the class object on the student profile
-  // now that classId exists. Falls back to academicLevel if not present —
-  // confirm the real shape and tighten this once known.
   class?: { id: string; title: string; term?: string | null } | null;
   enrollmentDate?: string;
   [key: string]: unknown;
@@ -47,6 +44,10 @@ type PlanPaymentState = {
 function isPastDate(dateStr: string): boolean {
   const today = new Date().toISOString().slice(0, 10);
   return dateStr < today;
+}
+
+function isTopicFullyDone(topic: LearningPlanBreakdownTopic) {
+  return topic.todo.length === 0 && topic.done.length > 0;
 }
 
 export default function StudentLearningPlanPage() {
@@ -90,6 +91,7 @@ export default function StudentLearningPlanPage() {
     () => plans.find((p) => p.status === "active") ?? plans[0] ?? null,
     [plans]
   );
+
   const otherPlans = useMemo(
     () => plans.filter((p) => p !== activePlan),
     [plans, activePlan]
@@ -107,23 +109,31 @@ export default function StudentLearningPlanPage() {
     return { status: "none", payment: null };
   }, [payments, activePlan]);
 
-  // The topic actually in progress starts expanded, so its next session
-  // is visible immediately — no click needed to see what's next.
-  useEffect(() => {
-    if (!activePlan) return;
-    const inProgress = activePlan.topics.find((t) => t.status === "in_progress");
-    if (inProgress) {
-      setExpanded((prev) => new Set(prev).add(inProgress.topicId));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Infer current topic from real data (todo arrays)
+  const currentTopicIndex = useMemo(() => {
+    if (!activePlan) return -1;
+    return activePlan.topics.findIndex((t) => t.todo.length > 0);
   }, [activePlan]);
 
-  function toggleTopic(topic: LearningPlanBreakdownTopic) {
-    if (topic.status === "pending") return; // locked — nothing to reveal yet
+  const currentTopic =
+    currentTopicIndex >= 0 && activePlan
+      ? activePlan.topics[currentTopicIndex]
+      : null;
+
+  const activeSession = currentTopic?.todo[0] ?? null;
+
+  // Auto-expand the topic that has remaining work
+  useEffect(() => {
+    if (currentTopic) {
+      setExpanded((prev) => new Set(prev).add(currentTopic.topicId));
+    }
+  }, [currentTopic]);
+
+  function toggleTopic(topicId: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(topic.topicId)) next.delete(topic.topicId);
-      else next.add(topic.topicId);
+      if (next.has(topicId)) next.delete(topicId);
+      else next.add(topicId);
       return next;
     });
   }
@@ -205,7 +215,7 @@ export default function StudentLearningPlanPage() {
 
         {!loading && !error && (
           <>
-            {/* Class / student card */}
+            {/* Student card */}
             <section className="mt-6 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] px-5 py-4 flex items-center gap-3">
               <div className="w-11 h-11 rounded-[11px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)] flex-none">
                 {fullName ? (
@@ -235,7 +245,7 @@ export default function StudentLearningPlanPage() {
                 </p>
               </div>
             ) : planPayment && planPayment.status !== "success" ? (
-              /* ---- Payment gate — nothing below is reachable until paid ---- */
+              /* Payment gate */
               <section className="mt-6 rounded-[var(--r-card)] border border-[var(--warn)] bg-[var(--surface)] p-6 space-y-4">
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-[var(--warn)]" />
@@ -248,15 +258,14 @@ export default function StudentLearningPlanPage() {
 
                 {planPayment.status === "pending" ? (
                   <p className="text-[12.5px] text-[var(--ink-3)] leading-relaxed">
-                    You&apos;ve submitted payment for this plan — an admin
-                    needs to approve it before your sessions unlock. Check
-                    back soon.
+                    You&apos;ve submitted payment for this plan — an admin needs
+                    to approve it before your sessions unlock. Check back soon.
                   </p>
                 ) : (
                   <p className="text-[12.5px] text-[var(--ink-3)] leading-relaxed">
-                    This learning plan needs to be paid for before you can
-                    start your sessions. Submit payment below — an admin will
-                    review and approve it.
+                    This learning plan needs to be paid for before you can start
+                    your sessions. Submit payment below — an admin will review
+                    and approve it.
                   </p>
                 )}
 
@@ -296,6 +305,7 @@ export default function StudentLearningPlanPage() {
                 </div>
               </section>
             ) : (
+              /* Topics — every topic can expand */
               <section className="mt-6">
                 <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
                   <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
@@ -310,32 +320,33 @@ export default function StudentLearningPlanPage() {
                   {activePlan.topics.map((topic, idx) => {
                     const total = topic.done.length + topic.todo.length;
                     const isOpen = expanded.has(topic.topicId);
-                    const nextDate = topic.todo[0]?.scheduledDate;
-                    const activeSession =
-                      topic.status === "in_progress" ? topic.todo[0] : null;
-                    const lockedAhead =
-                      topic.status === "in_progress" ? topic.todo.slice(1) : [];
+                    const isCurrent = idx === currentTopicIndex;
+                    const isFuture =
+                      currentTopicIndex >= 0 && idx > currentTopicIndex;
+
+                    const displayStatus = isTopicFullyDone(topic)
+                      ? "completed"
+                      : isCurrent
+                        ? "in_progress"
+                        : "pending";
+
+                    // Sessions after the first one in the current topic are locked
+                    const lockedAhead = isCurrent ? topic.todo.slice(1) : [];
 
                     return (
                       <li
                         key={topic.topicId}
                         className={cn(
                           "rounded-[var(--r-card)] border bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden",
-                          topic.status === "in_progress"
+                          isCurrent
                             ? "border-[var(--brand)]"
                             : "border-[var(--line)]"
                         )}
                       >
                         <button
                           type="button"
-                          onClick={() => toggleTopic(topic)}
-                          disabled={topic.status === "pending"}
-                          className={cn(
-                            "w-full text-left px-4 py-3.5 flex items-center gap-3",
-                            topic.status === "pending"
-                              ? "cursor-not-allowed opacity-60"
-                              : "hover:bg-[var(--surface-2)]"
-                          )}
+                          onClick={() => toggleTopic(topic.topicId)}
+                          className="w-full text-left px-4 py-3.5 flex items-center gap-3 hover:bg-[var(--surface-2)]"
                         >
                           <span className="w-6 h-6 rounded-full grid place-items-center text-[10.5px] font-bold flex-none bg-[var(--surface-3)] text-[var(--ink-3)]">
                             {idx + 1}
@@ -347,82 +358,128 @@ export default function StudentLearningPlanPage() {
                             </span>
                             <span className="block text-[11px] text-[var(--ink-3)] font-semibold mt-0.5">
                               {topic.done.length}/{total} sessions
-                              {topic.status === "pending" &&
-                                nextDate &&
-                                ` · starts ${nextDate}`}
+                              {isFuture &&
+                                topic.todo[0] &&
+                                ` · starts ${topic.todo[0].scheduledDate}`}
                             </span>
                           </span>
 
-                          <StatusPill status={topic.status} />
+                          <StatusPill status={displayStatus} />
 
-                          {topic.status === "pending" ? (
-                            <Lock className="w-4 h-4 text-[var(--ink-4)] flex-none" />
-                          ) : (
-                            <ChevronRight
-                              className={cn(
-                                "w-4 h-4 flex-none text-[var(--ink-4)] transition-transform",
-                                isOpen && "rotate-90"
-                              )}
-                            />
-                          )}
+                          <ChevronRight
+                            className={cn(
+                              "w-4 h-4 flex-none text-[var(--ink-4)] transition-transform",
+                              isOpen && "rotate-90"
+                            )}
+                          />
                         </button>
 
                         {isOpen && (
-                          <div className="px-4 pb-3.5 pt-1 border-t border-[var(--line-soft)] space-y-1.5">
-                            {/* Completed sessions — done, viewable */}
+                          <div className="px-4 pb-3.5 pt-1 border-t border-[var(--line-soft)] space-y-2">
+                            {/* Completed sessions */}
                             {topic.done.length > 0 && (
-                              <ul className="space-y-1.5 mt-2">
+                              <div className="mt-2 space-y-1.5">
+                                <p className="text-[10px] font-bold tracking-[0.12em] uppercase text-[var(--ink-4)] mb-1.5">
+                                  Completed
+                                </p>
                                 {topic.done.map((s) => (
-                                  <li
+                                  <div
                                     key={s.id}
-                                    className="flex items-center gap-2 text-[12px] text-[var(--ink-3)] font-semibold"
+                                    className="rounded-[10px] border border-[var(--line-soft)] bg-[var(--surface-2)] px-3.5 py-2.5 flex items-center gap-3"
                                   >
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--ok)] flex-none" />
-                                    Day {s.sessionDayNumber} · {s.scheduledDate}
-                                  </li>
+                                    <CheckCircle2 className="w-4 h-4 text-[var(--ok)] flex-none" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-[12.5px] font-bold text-[var(--ink)]">
+                                        Day {s.sessionDayNumber}
+                                      </p>
+                                      <p className="text-[11px] font-semibold text-[var(--ink-3)]">
+                                        {s.scheduledDate}
+                                      </p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        router.push(`/students/session/${s.id}`)
+                                      }
+                                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[7px] text-[11px] font-bold bg-[var(--surface-3)] text-[var(--ink-2)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] flex-none"
+                                    >
+                                      Review
+                                    </button>
+                                  </div>
                                 ))}
-                              </ul>
-                            )}
-
-                            {/* The one session actually reachable right now */}
-                            {activeSession && (
-                              <div className="mt-2 rounded-[10px] border-2 border-[var(--brand)] bg-[var(--brand-soft)] px-3.5 py-3 flex items-center gap-3">
-                                <PlayCircle className="w-5 h-5 text-[var(--brand)] flex-none" />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[12.5px] font-bold text-[var(--brand)]">
-                                    Day {activeSession.sessionDayNumber} ·{" "}
-                                    {activeSession.scheduledDate}
-                                  </p>
-                                  <p className="text-[11px] font-semibold text-[var(--brand)] opacity-80">
-                                    {isPastDate(activeSession.scheduledDate)
-                                      ? "Overdue — catch up now"
-                                      : "Ready to start"}
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => router.push("/students/session")}
-                                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[11.5px] font-bold bg-[var(--brand)] text-white flex-none"
-                                >
-                                  Open
-                                  <ArrowRight className="w-3.5 h-3.5" />
-                                </button>
                               </div>
                             )}
 
-                            {/* Later sessions in this topic — not reachable yet */}
-                            {lockedAhead.length > 0 && (
-                              <ul className="space-y-1.5 mt-2">
-                                {lockedAhead.map((s) => (
-                                  <li
-                                    key={s.id}
-                                    className="flex items-center gap-2 text-[12px] text-[var(--ink-4)] font-semibold opacity-70"
+                            {/* Current reachable session */}
+                            {isCurrent && activeSession && (
+                              <div className="mt-2">
+                                {topic.done.length > 0 && (
+                                  <p className="text-[10px] font-bold tracking-[0.12em] uppercase text-[var(--ink-4)] mb-1.5">
+                                    Now
+                                  </p>
+                                )}
+                                <div className="rounded-[10px] border-2 border-[var(--brand)] bg-[var(--brand-soft)] px-3.5 py-3 flex items-center gap-3">
+                                  <PlayCircle className="w-5 h-5 text-[var(--brand)] flex-none" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[12.5px] font-bold text-[var(--brand)]">
+                                      Day {activeSession.sessionDayNumber} ·{" "}
+                                      {activeSession.scheduledDate}
+                                    </p>
+                                    <p className="text-[11px] font-semibold text-[var(--brand)] opacity-80">
+                                      {isPastDate(activeSession.scheduledDate)
+                                        ? "Overdue — catch up now"
+                                        : "Ready to start"}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      router.push(
+                                        `/students/session/${activeSession.id}`
+                                      )
+                                    }
+                                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[11.5px] font-bold bg-[var(--brand)] text-white flex-none"
                                   >
-                                    <Lock className="w-3.5 h-3.5 flex-none" />
-                                    Day {s.sessionDayNumber} · {s.scheduledDate}
-                                  </li>
-                                ))}
-                              </ul>
+                                    Open
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Locked sessions (rest of current topic OR whole future topic) */}
+                            {(isCurrent
+                              ? lockedAhead
+                              : isFuture
+                                ? topic.todo
+                                : []
+                            ).length > 0 && (
+                              <div className="mt-2 space-y-1.5">
+                                <p className="text-[10px] font-bold tracking-[0.12em] uppercase text-[var(--ink-4)] mb-1.5">
+                                  {isFuture ? "Upcoming" : "Coming up"}
+                                </p>
+                                {(isCurrent ? lockedAhead : topic.todo).map(
+                                  (s) => (
+                                    <div
+                                      key={s.id}
+                                      className="rounded-[10px] border border-[var(--line-soft)] px-3.5 py-2.5 flex items-center gap-3 opacity-70"
+                                    >
+                                      <Lock className="w-3.5 h-3.5 text-[var(--ink-4)] flex-none" />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-[12.5px] font-bold text-[var(--ink-3)]">
+                                          Day {s.sessionDayNumber}
+                                        </p>
+                                        <p className="text-[11px] font-semibold text-[var(--ink-4)]">
+                                          {s.scheduledDate}
+                                        </p>
+                                      </div>
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--surface-3)] text-[var(--ink-4)] flex-none">
+                                        Locked
+                                      </span>
+                                    </div>
+                                  )
+                                )}
+                              </div>
                             )}
                           </div>
                         )}

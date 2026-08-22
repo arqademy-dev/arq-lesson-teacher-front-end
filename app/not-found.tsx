@@ -1,8 +1,12 @@
 // app/not-found.tsx
-import Link from "next/link";
+"use client";
+
+import { useRouter } from "next/navigation";
 import { Compass } from "lucide-react";
 
 export default function NotFound() {
+  const router = useRouter();
+
   return (
     <div className="min-h-screen grid place-items-center px-6 text-center">
       <div>
@@ -16,12 +20,12 @@ export default function NotFound() {
           The page you&apos;re looking for doesn&apos;t exist or may have moved.
         </p>
         <div className="mt-6 flex items-center justify-center gap-3">
-          <Link
-            href="/"
+          <button
+            onClick={() => router.back()}
             className="h-10 px-4 inline-flex items-center rounded-[9px] text-[12.5px] font-bold bg-[var(--brand)] text-white"
           >
-            Go home
-          </Link>
+            Go back
+          </button>
         </div>
       </div>
     </div>

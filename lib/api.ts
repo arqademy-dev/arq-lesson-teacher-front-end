@@ -132,6 +132,12 @@ export async function getCurrentSession() {
   return api("/api/students/me/current-session", { skipAuthRedirect: false });
 }
 
+export async function getStudentSession(sessionId: string) {
+  return api(`/api/students/me/sessions/${sessionId}`,
+    { skipAuthRedirect: false }
+  );
+}
+
 export async function completeSession(sessionId: string) {
   return api(`/api/students/me/sessions/${sessionId}/complete`, {
     method: "POST",
