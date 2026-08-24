@@ -282,6 +282,7 @@ export default function StudentLearningPlanPage() {
                 </div>
               </section>
             ) : (
+// {/* ── Topics as Week grid + modal ── */}
 <section className="mt-6">
   <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
     <div>
@@ -329,7 +330,7 @@ export default function StudentLearningPlanPage() {
     );
   })()}
 
-  {/* Week cards grid */}
+  {/* Week cards — lighter default, darker when current / selected */}
   <div className="grid grid-cols-2 gap-3">
     {activePlan.topics.map((topic, idx) => {
       const total = topic.done.length + topic.todo.length;
@@ -337,30 +338,32 @@ export default function StudentLearningPlanPage() {
       const isCurrent = idx === currentTopicIndex;
       const isDone = isTopicFullyDone(topic);
       const isFuture = currentTopicIndex >= 0 && idx > currentTopicIndex;
-      const isSelected = expanded.has(topic.topicId);
 
       return (
         <button
           key={topic.topicId}
           type="button"
-          onClick={() => toggleTopic(topic.topicId)}
+          onClick={() => setExpanded(new Set([topic.topicId]))} // open modal for this week
           className={cn(
-            "relative rounded-[14px] border text-left p-4 transition min-h-[96px] flex flex-col justify-between",
+            "rounded-[14px] border text-left p-4 min-h-[100px] flex flex-col justify-between transition",
+            // Completed → solid brand
             isDone &&
               "bg-[var(--brand)] border-[var(--brand)] text-white shadow-[var(--shadow-sm)]",
+            // Current (active) → stronger surface + brand border
             isCurrent &&
               !isDone &&
-              "bg-[var(--surface)] border-[var(--brand)] shadow-[var(--shadow-sm)]",
+              "bg-[var(--surface-2)] border-[var(--brand)] shadow-[var(--shadow-sm)]",
+            // Future / locked → light + muted
             isFuture &&
-              "bg-[var(--surface)] border-[var(--line-soft)] opacity-70",
+              "bg-[var(--surface)] border-[var(--line-soft)] opacity-75",
+            // Other past-but-not-fully-done → light
             !isDone &&
               !isCurrent &&
               !isFuture &&
-              "bg-[var(--surface)] border-[var(--line)]",
-            isSelected && !isDone && "ring-2 ring-[var(--brand)] ring-offset-1"
+              "bg-[var(--surface)] border-[var(--line)] hover:bg-[var(--surface-2)]"
           )}
         >
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-2 w-full">
             <div>
               <p
                 className={cn(
@@ -372,7 +375,7 @@ export default function StudentLearningPlanPage() {
               </p>
               <p
                 className={cn(
-                  "font-heading text-[22px] font-semibold leading-none mt-0.5",
+                  "font-heading text-[22px] font-semibold leading-none mt-1",
                   isDone ? "text-white" : "text-[var(--ink)]"
                 )}
               >
@@ -380,13 +383,13 @@ export default function StudentLearningPlanPage() {
               </p>
             </div>
             {isDone && (
-              <span className="w-6 h-6 rounded-full bg-white/20 grid place-items-center">
+              <span className="w-6 h-6 rounded-full bg-white/20 grid place-items-center flex-none">
                 <CheckCircle2 className="w-4 h-4 text-white" />
               </span>
             )}
           </div>
 
-          <div className="mt-3">
+          <div className="mt-3 w-full">
             <p
               className={cn(
                 "text-[12px] font-bold truncate",
@@ -397,7 +400,7 @@ export default function StudentLearningPlanPage() {
                 ? "Completed"
                 : isFuture
                   ? "Locked"
-                  : `${doneCount}/${total} done`}
+                  : `${doneCount}/${total || 0} done`}
             </p>
             <p
               className={cn(
@@ -405,7 +408,7 @@ export default function StudentLearningPlanPage() {
                 isDone ? "text-white/75" : "text-[var(--ink-3)]"
               )}
             >
-              {topic.topicTitle.replace(/^Week\s*\d+:\s*/i, "")}
+              {topic.topicTitle.replace(/^Week\s*\d+:\s*/i, "") || topic.topicTitle}
             </p>
           </div>
         </button>
@@ -413,145 +416,187 @@ export default function StudentLearningPlanPage() {
     })}
   </div>
 
-  {/* Expanded week detail (days) */}
-  {activePlan.topics.map((topic, idx) => {
-    if (!expanded.has(topic.topicId)) return null;
-
+  {/* ── Week detail POPUP ── */}
+  {Array.from(expanded).map((topicId) => {
+    const idx = activePlan.topics.findIndex((t) => t.topicId === topicId);
+    if (idx < 0) return null;
+    const topic = activePlan.topics[idx];
     const isCurrent = idx === currentTopicIndex;
     const isFuture = currentTopicIndex >= 0 && idx > currentTopicIndex;
-    const activeSession = isCurrent ? topic.todo[0] : null;
-    const lockedAhead = isCurrent ? topic.todo.slice(1) : [];
 
-    // All days in order: done first, then todo
     const allDays = [
       ...topic.done.map((s) => ({ ...s, _state: "done" as const })),
       ...topic.todo.map((s, i) => ({
         ...s,
         _state:
-          isCurrent && i === 0
-            ? ("now" as const)
-            : ("locked" as const),
+          isCurrent && i === 0 ? ("now" as const) : ("locked" as const),
       })),
     ];
 
     return (
       <div
-        key={`detail-${topic.topicId}`}
-        className="mt-5 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden"
+        key={topicId}
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+        role="dialog"
+        aria-modal="true"
       >
-        <div className="px-5 py-3.5 border-b border-[var(--line-soft)] flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--brand)]">
-              Week {idx + 1}
-            </p>
-            <h2 className="font-heading text-[15px] font-semibold text-[var(--ink)] mt-0.5">
-              {topic.topicTitle}
-            </h2>
+        {/* Backdrop */}
+        <button
+          type="button"
+          className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+          onClick={() => setExpanded(new Set())}
+          aria-label="Close"
+        />
+
+        {/* Panel */}
+        <div className="relative z-10 w-full max-w-lg max-h-[88vh] sm:max-h-[85vh] mx-0 sm:mx-4 rounded-t-[20px] sm:rounded-[20px] bg-[var(--surface)] border border-[var(--line)] shadow-xl flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-[var(--line-soft)] flex-none">
+            <div className="min-w-0">
+              <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--brand)]">
+                Week {idx + 1}
+              </p>
+              <h2 className="font-heading text-[17px] font-semibold text-[var(--ink)] mt-0.5 truncate">
+                {topic.topicTitle}
+              </h2>
+              <p className="text-[11px] text-[var(--ink-3)] font-semibold mt-1">
+                {topic.done.length}/{topic.done.length + topic.todo.length} sessions
+                {isFuture && " · Locked until previous weeks are done"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded(new Set())}
+              className="w-9 h-9 rounded-full grid place-items-center bg-[var(--surface-3)] text-[var(--ink-2)] hover:bg-[var(--surface-2)] flex-none text-[18px] leading-none font-bold"
+              aria-label="Close"
+            >
+              ×
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => toggleTopic(topic.topicId)}
-            className="text-[11.5px] font-bold text-[var(--ink-3)] hover:text-[var(--brand)]"
-          >
-            Close
-          </button>
-        </div>
 
-        <div className="p-3 space-y-2">
-          {allDays.map((s) => {
-            const isDone = s._state === "done";
-            const isNow = s._state === "now";
-            const isLocked = s._state === "locked";
+          {/* Days list (scrollable) */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+            {allDays.length === 0 ? (
+              <p className="text-[13px] text-[var(--ink-3)] text-center py-8">
+                No sessions in this week yet.
+              </p>
+            ) : (
+              allDays.map((s) => {
+                const isDone = s._state === "done";
+                const isNow = s._state === "now";
+                const isLocked = s._state === "locked";
 
-            return (
-              <div
-                key={s.id}
-                className={cn(
-                  "rounded-[12px] border px-4 py-3",
-                  isNow
-                    ? "border-[var(--brand)] bg-[var(--brand-soft)]"
-                    : "border-[var(--line-soft)] bg-[var(--surface)]"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  {/* Day badge */}
-                  <span
+                return (
+                  <div
+                    key={s.id}
                     className={cn(
-                      "w-8 h-8 rounded-[9px] grid place-items-center text-[12px] font-bold flex-none",
-                      isDone && "bg-[var(--ok)] text-white",
-                      isNow && "bg-[var(--brand)] text-white",
-                      isLocked && "bg-[var(--surface-3)] text-[var(--ink-4)]"
+                      "rounded-[12px] border px-4 py-3",
+                      isNow
+                        ? "border-[var(--brand)] bg-[var(--brand-soft)]"
+                        : "border-[var(--line-soft)] bg-[var(--surface)]"
                     )}
                   >
-                    {isDone ? (
-                      <CheckCircle2 className="w-4 h-4" />
-                    ) : (
-                      s.sessionDayNumber
-                    )}
-                  </span>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-bold text-[var(--ink)]">
-                      Day {s.sessionDayNumber}
-                    </p>
-                    <p className="text-[11px] font-semibold text-[var(--ink-3)]">
-                      {s.scheduledDate}
-                    </p>
-                  </div>
-
-                  {/* Action */}
-                  {isDone && (
-                    <div className="flex items-center gap-2 flex-none">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--ok-soft)] text-[var(--ok)]">
-                        Done
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          router.push(`/students/session/${s.id}`)
-                        }
-                        className="text-[11px] font-bold text-[var(--brand)] hover:underline"
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={cn(
+                          "w-8 h-8 rounded-[9px] grid place-items-center text-[12px] font-bold flex-none",
+                          isDone && "bg-[var(--ok)] text-white",
+                          isNow && "bg-[var(--brand)] text-white",
+                          isLocked &&
+                            "bg-[var(--surface-3)] text-[var(--ink-4)]"
+                        )}
                       >
-                        Review
-                      </button>
+                        {isDone ? (
+                          <CheckCircle2 className="w-4 h-4" />
+                        ) : (
+                          s.sessionDayNumber
+                        )}
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-bold text-[var(--ink)]">
+                          Day {s.sessionDayNumber}
+                        </p>
+                        <p className="text-[11px] font-semibold text-[var(--ink-3)]">
+                          {s.scheduledDate}
+                        </p>
+                      </div>
+
+                      {isDone && (
+                        <div className="flex items-center gap-2 flex-none">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--ok-soft)] text-[var(--ok)]">
+                            Done
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpanded(new Set());
+                              router.push(`/students/session/${s.id}`);
+                            }}
+                            className="text-[11px] font-bold text-[var(--brand)] hover:underline"
+                          >
+                            Review
+                          </button>
+                        </div>
+                      )}
+
+                      {isNow && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpanded(new Set());
+                            router.push(`/students/session/${s.id}`);
+                          }}
+                          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[11.5px] font-bold bg-[var(--brand)] text-white flex-none"
+                        >
+                          Open
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      {isLocked && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--ink-4)] flex-none">
+                          <Lock className="w-3.5 h-3.5" />
+                          Locked
+                        </span>
+                      )}
                     </div>
-                  )}
 
-                  {isNow && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        router.push(`/students/session/${s.id}`)
-                      }
-                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[11.5px] font-bold bg-[var(--brand)] text-white flex-none"
-                    >
-                      Open
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                    {/* Resources / content note */}
+                    {(isDone || isNow) && (
+                      <p className="mt-2 text-[11px] text-[var(--ink-4)] font-semibold">
+                        Resources & interactions open inside the session.
+                      </p>
+                    )}
 
-                  {isLocked && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--ink-4)]">
-                      <Lock className="w-3.5 h-3.5" />
-                      Locked
-                    </span>
-                  )}
-                </div>
-
-                {/* AI Feedback row — only for completed days for now */}
-                {isDone && (
-                  <div className="mt-2.5 pt-2.5 border-t border-[var(--line-soft)]">
-                    <Link
-                      href={`/students/feedback/${s.id}`}
-                      className="flex items-center justify-center h-9 rounded-[9px] text-[12px] font-bold text-[var(--brand)] bg-[var(--brand-soft)] hover:opacity-90 transition"
-                    >
-                      View AI Feedback
-                    </Link>
+                    {/* AI Feedback for completed days */}
+                    {isDone && (
+                      <div className="mt-2.5 pt-2.5 border-t border-[var(--line-soft)]">
+                        <Link
+                          href={`/students/feedback/${s.id}`}
+                          onClick={() => setExpanded(new Set())}
+                          className="flex items-center justify-center h-9 rounded-[9px] text-[12px] font-bold text-[var(--brand)] bg-[var(--brand-soft)] hover:opacity-90 transition"
+                        >
+                          View AI Feedback
+                        </Link>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer close */}
+          <div className="flex-none px-4 py-3 border-t border-[var(--line-soft)]">
+            <button
+              type="button"
+              onClick={() => setExpanded(new Set())}
+              className="w-full h-11 rounded-[10px] text-[13px] font-bold bg-[var(--surface-3)] text-[var(--ink-2)] hover:bg-[var(--surface-2)]"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     );
