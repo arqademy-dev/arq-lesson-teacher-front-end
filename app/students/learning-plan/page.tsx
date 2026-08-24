@@ -123,11 +123,11 @@ export default function StudentLearningPlanPage() {
   const activeSession = currentTopic?.todo[0] ?? null;
 
   // Auto-expand the topic that has remaining work
-  useEffect(() => {
-    if (currentTopic) {
-      setExpanded((prev) => new Set(prev).add(currentTopic.topicId));
-    }
-  }, [currentTopic]);
+  // useEffect(() => {
+  //   if (currentTopic) {
+  //     setExpanded((prev) => new Set(prev).add(currentTopic.topicId));
+  //   }
+  // }, [currentTopic]);
 
   function toggleTopic(topicId: string) {
     setExpanded((prev) => {
@@ -331,90 +331,91 @@ export default function StudentLearningPlanPage() {
   })()}
 
   {/* Week cards — lighter default, darker when current / selected */}
-  <div className="grid grid-cols-2 gap-3">
-    {activePlan.topics.map((topic, idx) => {
-      const total = topic.done.length + topic.todo.length;
-      const doneCount = topic.done.length;
-      const isCurrent = idx === currentTopicIndex;
-      const isDone = isTopicFullyDone(topic);
-      const isFuture = currentTopicIndex >= 0 && idx > currentTopicIndex;
+<div className="grid grid-cols-2 gap-3">
+  {activePlan.topics.map((topic, idx) => {
+    const total = topic.done.length + topic.todo.length;
+    const doneCount = topic.done.length;
+    const isCurrent = idx === currentTopicIndex;
+    const isDone = isTopicFullyDone(topic);
+    const isFuture = currentTopicIndex >= 0 && idx > currentTopicIndex;
 
-      return (
-        <button
-          key={topic.topicId}
-          type="button"
-          onClick={() => setExpanded(new Set([topic.topicId]))} // open modal for this week
-          className={cn(
-            "rounded-[14px] border text-left p-4 min-h-[100px] flex flex-col justify-between transition",
-            // Completed → solid brand
-            isDone &&
-              "bg-[var(--brand)] border-[var(--brand)] text-white shadow-[var(--shadow-sm)]",
-            // Current (active) → stronger surface + brand border
-            isCurrent &&
-              !isDone &&
-              "bg-[var(--surface-2)] border-[var(--brand)] shadow-[var(--shadow-sm)]",
-            // Future / locked → light + muted
-            isFuture &&
-              "bg-[var(--surface)] border-[var(--line-soft)] opacity-75",
-            // Other past-but-not-fully-done → light
+    return (
+      <button
+        key={topic.topicId}
+        type="button"
+        onClick={() => setExpanded(new Set([topic.topicId]))}
+        className={cn(
+          "rounded-[14px] border text-left p-4 min-h-[100px] flex flex-col justify-between transition-colors",
+          // Completed — solid brand
+          isDone &&
+            "bg-[var(--brand)] border-[var(--brand)] text-white shadow-sm",
+          // Active / current — darker surface + brand border
+          isCurrent &&
             !isDone &&
-              !isCurrent &&
-              !isFuture &&
-              "bg-[var(--surface)] border-[var(--line)] hover:bg-[var(--surface-2)]"
-          )}
-        >
-          <div className="flex items-start justify-between gap-2 w-full">
-            <div>
-              <p
-                className={cn(
-                  "text-[10px] font-bold tracking-[0.14em] uppercase",
-                  isDone ? "text-white/80" : "text-[var(--ink-3)]"
-                )}
-              >
-                Week
-              </p>
-              <p
-                className={cn(
-                  "font-heading text-[22px] font-semibold leading-none mt-1",
-                  isDone ? "text-white" : "text-[var(--ink)]"
-                )}
-              >
-                {idx + 1}
-              </p>
-            </div>
-            {isDone && (
-              <span className="w-6 h-6 rounded-full bg-white/20 grid place-items-center flex-none">
-                <CheckCircle2 className="w-4 h-4 text-white" />
-              </span>
-            )}
-          </div>
-
-          <div className="mt-3 w-full">
+            "bg-[color-mix(in_srgb,var(--brand)_12%,var(--surface))] border-[var(--brand)] shadow-sm",
+          // Locked (future) — very light + muted
+          isFuture &&
+            "bg-[var(--surface)] border-[var(--line-soft)] opacity-70",
+          // Default (other) — light surface
+          !isDone &&
+            !isCurrent &&
+            !isFuture &&
+            "bg-[var(--surface)] border-[var(--line)] hover:bg-[color-mix(in_srgb,var(--brand)_6%,var(--surface))]"
+        )}
+      >
+        <div className="flex items-start justify-between gap-2 w-full">
+          <div>
             <p
               className={cn(
-                "text-[12px] font-bold truncate",
+                "text-[10px] font-bold tracking-[0.14em] uppercase",
+                isDone ? "text-white/80" : "text-[var(--ink-3)]"
+              )}
+            >
+              Week
+            </p>
+            <p
+              className={cn(
+                "font-heading text-[22px] font-semibold leading-none mt-1",
                 isDone ? "text-white" : "text-[var(--ink)]"
               )}
             >
-              {isDone
-                ? "Completed"
-                : isFuture
-                  ? "Locked"
-                  : `${doneCount}/${total || 0} done`}
-            </p>
-            <p
-              className={cn(
-                "text-[10.5px] font-semibold mt-0.5 truncate",
-                isDone ? "text-white/75" : "text-[var(--ink-3)]"
-              )}
-            >
-              {topic.topicTitle.replace(/^Week\s*\d+:\s*/i, "") || topic.topicTitle}
+              {idx + 1}
             </p>
           </div>
-        </button>
-      );
-    })}
-  </div>
+          {isDone && (
+            <span className="w-6 h-6 rounded-full bg-white/20 grid place-items-center flex-none">
+              <CheckCircle2 className="w-4 h-4 text-white" />
+            </span>
+          )}
+        </div>
+
+        <div className="mt-3 w-full">
+          <p
+            className={cn(
+              "text-[12px] font-bold truncate",
+              isDone ? "text-white" : "text-[var(--ink)]"
+            )}
+          >
+            {isDone
+              ? "Completed"
+              : isFuture
+                ? "Locked"
+                : `${doneCount}/${total || 0} done`}
+          </p>
+          <p
+            className={cn(
+              "text-[10.5px] font-semibold mt-0.5 truncate",
+              isDone ? "text-white/75" : "text-[var(--ink-3)]"
+            )}
+          >
+            {topic.topicTitle.replace(/^Week\s*\d+:\s*/i, "") ||
+              topic.topicTitle}
+          </p>
+        </div>
+      </button>
+    );
+  })}
+</div>
 
   {/* ── Week detail POPUP ── */}
   {Array.from(expanded).map((topicId) => {
