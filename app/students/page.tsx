@@ -130,29 +130,6 @@ export default function StudentDashboardPage() {
 
         {!loading && !error && (
           <>
-            {/* Profile strip — compact */}
-            <section className="mt-8 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] px-5 py-4 flex items-center gap-3">
-              <div className="w-11 h-11 rounded-[11px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)] flex-none">
-                {fullName ? (
-                  <span className="font-heading font-semibold text-[14px]">
-                    {(me?.firstName?.[0] ?? "").toUpperCase()}
-                    {(me?.lastName?.[0] ?? "").toUpperCase()}
-                  </span>
-                ) : (
-                  <User className="w-5 h-5" />
-                )}
-              </div>
-              <div className="min-w-0">
-                <h2 className="font-heading text-[15px] font-semibold text-[var(--ink)] truncate">
-                  {fullName || "Student"}
-                </h2>
-                <p className="text-[12px] text-[var(--ink-3)] font-semibold mt-0.5">
-                  {[me?.arqId, me?.academicLevel].filter(Boolean).join(" · ") ||
-                    "Learner profile"}
-                </p>
-              </div>
-            </section>
-
             {/* Primary CTA — always go through the learning plan */}
             <section className="mt-5 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
               <div className="px-5 py-4 border-b border-[var(--line-soft)] flex items-center justify-between gap-3 flex-wrap">
@@ -173,22 +150,6 @@ export default function StudentDashboardPage() {
               </div>
 
               <div className="px-5 py-4 space-y-3">
-                {session && topic ? (
-                  <div className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-[var(--ink-3)] font-semibold">
-                    <span>Day {session.session.sessionDayNumber}</span>
-                    <span>Scheduled {session.session.scheduledDate}</span>
-                    <span>
-                      {session.resources?.length ?? 0} resource
-                      {(session.resources?.length ?? 0) === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                ) : (
-                  <p className="text-[13px] text-[var(--ink-3)]">
-                    Open your plan to see topics and sessions. Sessions unlock
-                    one at a time after you complete the previous one.
-                  </p>
-                )}
-
                 {/* Payment-aware primary button */}
                 {payments?.hasSuccessfulPayment ? (
                   <Link
@@ -223,7 +184,7 @@ export default function StudentDashboardPage() {
               </div>
             </section>
 
-            {/* Two cards only: Progress (→ report) + Payment (→ payments) */}
+            {/* Two cards only: Progress (→ report) + Payment (→ payments)
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Link
                 href="/students/report"
@@ -288,10 +249,10 @@ export default function StudentDashboardPage() {
                   View payments →
                 </p>
               </Link>
-            </div>
+            </div> */}
 
             {/* Light files entry — only useful for students who actually upload */}
-            <div className="mt-5">
+            {/* <div className="mt-5">
               <Link
                 href="/students/files"
                 className="inline-flex items-center gap-2 text-[12.5px] font-bold text-[var(--ink-2)] hover:text-[var(--brand)]"
@@ -300,7 +261,7 @@ export default function StudentDashboardPage() {
                 My uploaded work
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
-            </div>
+            </div> */}
           </>
         )}
       </main>

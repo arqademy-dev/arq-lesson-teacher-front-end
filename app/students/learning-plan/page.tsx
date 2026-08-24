@@ -215,29 +215,6 @@ export default function StudentLearningPlanPage() {
 
         {!loading && !error && (
           <>
-            {/* Student card */}
-            <section className="mt-6 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] px-5 py-4 flex items-center gap-3">
-              <div className="w-11 h-11 rounded-[11px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)] flex-none">
-                {fullName ? (
-                  <span className="font-heading font-semibold text-[14px]">
-                    {(me?.firstName?.[0] ?? "").toUpperCase()}
-                    {(me?.lastName?.[0] ?? "").toUpperCase()}
-                  </span>
-                ) : (
-                  <User className="w-5 h-5" />
-                )}
-              </div>
-              <div className="min-w-0">
-                <p className="font-heading text-[14px] font-semibold text-[var(--ink)] truncate">
-                  {fullName || "Student"}
-                </p>
-                <p className="text-[11.5px] text-[var(--ink-3)] font-semibold mt-0.5">
-                  {[className, me?.arqId].filter(Boolean).join(" · ") ||
-                    "Learner profile"}
-                </p>
-              </div>
-            </section>
-
             {!activePlan ? (
               <div className="mt-8 rounded-[var(--r-card)] border border-dashed border-[var(--line)] bg-[var(--surface)] px-5 py-14 text-center">
                 <p className="text-[13px] text-[var(--ink-3)]">
@@ -305,189 +282,281 @@ export default function StudentLearningPlanPage() {
                 </div>
               </section>
             ) : (
-              /* Topics — every topic can expand */
-              <section className="mt-6">
-                <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-                  <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
-                    Topics
-                  </p>
-                  <span className="text-[11px] font-bold text-[var(--ink-3)] capitalize">
-                    Plan status: {activePlan.status}
+<section className="mt-6">
+  <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+    <div>
+      <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
+        Study plan
+      </p>
+      <p className="text-[12px] text-[var(--ink-3)] font-semibold mt-0.5">
+        {activePlan.topics.length} weeks ·{" "}
+        {activePlan.topics.filter((t) => isTopicFullyDone(t)).length} completed
+      </p>
+    </div>
+    <span className="text-[11px] font-bold text-[var(--ink-3)] capitalize">
+      {activePlan.status}
+    </span>
+  </div>
+
+  {/* Progress bar */}
+  {(() => {
+    const totalSessions = activePlan.topics.reduce(
+      (n, t) => n + t.done.length + t.todo.length,
+      0
+    );
+    const doneSessions = activePlan.topics.reduce(
+      (n, t) => n + t.done.length,
+      0
+    );
+    const pct =
+      totalSessions > 0 ? Math.round((doneSessions / totalSessions) * 100) : 0;
+    return (
+      <div className="mb-5">
+        <div className="flex justify-between text-[11px] font-bold text-[var(--ink-3)] mb-1.5">
+          <span>
+            Week {currentTopicIndex >= 0 ? currentTopicIndex + 1 : "—"} of{" "}
+            {activePlan.topics.length}
+          </span>
+          <span>{pct}%</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-[var(--surface-3)] overflow-hidden">
+          <div
+            className="h-full rounded-full bg-[var(--brand)] transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    );
+  })()}
+
+  {/* Week cards grid */}
+  <div className="grid grid-cols-2 gap-3">
+    {activePlan.topics.map((topic, idx) => {
+      const total = topic.done.length + topic.todo.length;
+      const doneCount = topic.done.length;
+      const isCurrent = idx === currentTopicIndex;
+      const isDone = isTopicFullyDone(topic);
+      const isFuture = currentTopicIndex >= 0 && idx > currentTopicIndex;
+      const isSelected = expanded.has(topic.topicId);
+
+      return (
+        <button
+          key={topic.topicId}
+          type="button"
+          onClick={() => toggleTopic(topic.topicId)}
+          className={cn(
+            "relative rounded-[14px] border text-left p-4 transition min-h-[96px] flex flex-col justify-between",
+            isDone &&
+              "bg-[var(--brand)] border-[var(--brand)] text-white shadow-[var(--shadow-sm)]",
+            isCurrent &&
+              !isDone &&
+              "bg-[var(--surface)] border-[var(--brand)] shadow-[var(--shadow-sm)]",
+            isFuture &&
+              "bg-[var(--surface)] border-[var(--line-soft)] opacity-70",
+            !isDone &&
+              !isCurrent &&
+              !isFuture &&
+              "bg-[var(--surface)] border-[var(--line)]",
+            isSelected && !isDone && "ring-2 ring-[var(--brand)] ring-offset-1"
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p
+                className={cn(
+                  "text-[10px] font-bold tracking-[0.14em] uppercase",
+                  isDone ? "text-white/80" : "text-[var(--ink-3)]"
+                )}
+              >
+                Week
+              </p>
+              <p
+                className={cn(
+                  "font-heading text-[22px] font-semibold leading-none mt-0.5",
+                  isDone ? "text-white" : "text-[var(--ink)]"
+                )}
+              >
+                {idx + 1}
+              </p>
+            </div>
+            {isDone && (
+              <span className="w-6 h-6 rounded-full bg-white/20 grid place-items-center">
+                <CheckCircle2 className="w-4 h-4 text-white" />
+              </span>
+            )}
+          </div>
+
+          <div className="mt-3">
+            <p
+              className={cn(
+                "text-[12px] font-bold truncate",
+                isDone ? "text-white" : "text-[var(--ink)]"
+              )}
+            >
+              {isDone
+                ? "Completed"
+                : isFuture
+                  ? "Locked"
+                  : `${doneCount}/${total} done`}
+            </p>
+            <p
+              className={cn(
+                "text-[10.5px] font-semibold mt-0.5 truncate",
+                isDone ? "text-white/75" : "text-[var(--ink-3)]"
+              )}
+            >
+              {topic.topicTitle.replace(/^Week\s*\d+:\s*/i, "")}
+            </p>
+          </div>
+        </button>
+      );
+    })}
+  </div>
+
+  {/* Expanded week detail (days) */}
+  {activePlan.topics.map((topic, idx) => {
+    if (!expanded.has(topic.topicId)) return null;
+
+    const isCurrent = idx === currentTopicIndex;
+    const isFuture = currentTopicIndex >= 0 && idx > currentTopicIndex;
+    const activeSession = isCurrent ? topic.todo[0] : null;
+    const lockedAhead = isCurrent ? topic.todo.slice(1) : [];
+
+    // All days in order: done first, then todo
+    const allDays = [
+      ...topic.done.map((s) => ({ ...s, _state: "done" as const })),
+      ...topic.todo.map((s, i) => ({
+        ...s,
+        _state:
+          isCurrent && i === 0
+            ? ("now" as const)
+            : ("locked" as const),
+      })),
+    ];
+
+    return (
+      <div
+        key={`detail-${topic.topicId}`}
+        className="mt-5 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden"
+      >
+        <div className="px-5 py-3.5 border-b border-[var(--line-soft)] flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--brand)]">
+              Week {idx + 1}
+            </p>
+            <h2 className="font-heading text-[15px] font-semibold text-[var(--ink)] mt-0.5">
+              {topic.topicTitle}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => toggleTopic(topic.topicId)}
+            className="text-[11.5px] font-bold text-[var(--ink-3)] hover:text-[var(--brand)]"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="p-3 space-y-2">
+          {allDays.map((s) => {
+            const isDone = s._state === "done";
+            const isNow = s._state === "now";
+            const isLocked = s._state === "locked";
+
+            return (
+              <div
+                key={s.id}
+                className={cn(
+                  "rounded-[12px] border px-4 py-3",
+                  isNow
+                    ? "border-[var(--brand)] bg-[var(--brand-soft)]"
+                    : "border-[var(--line-soft)] bg-[var(--surface)]"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  {/* Day badge */}
+                  <span
+                    className={cn(
+                      "w-8 h-8 rounded-[9px] grid place-items-center text-[12px] font-bold flex-none",
+                      isDone && "bg-[var(--ok)] text-white",
+                      isNow && "bg-[var(--brand)] text-white",
+                      isLocked && "bg-[var(--surface-3)] text-[var(--ink-4)]"
+                    )}
+                  >
+                    {isDone ? (
+                      <CheckCircle2 className="w-4 h-4" />
+                    ) : (
+                      s.sessionDayNumber
+                    )}
                   </span>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-bold text-[var(--ink)]">
+                      Day {s.sessionDayNumber}
+                    </p>
+                    <p className="text-[11px] font-semibold text-[var(--ink-3)]">
+                      {s.scheduledDate}
+                    </p>
+                  </div>
+
+                  {/* Action */}
+                  {isDone && (
+                    <div className="flex items-center gap-2 flex-none">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--ok-soft)] text-[var(--ok)]">
+                        Done
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push(`/students/session/${s.id}`)
+                        }
+                        className="text-[11px] font-bold text-[var(--brand)] hover:underline"
+                      >
+                        Review
+                      </button>
+                    </div>
+                  )}
+
+                  {isNow && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(`/students/session/${s.id}`)
+                      }
+                      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[11.5px] font-bold bg-[var(--brand)] text-white flex-none"
+                    >
+                      Open
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  {isLocked && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--ink-4)]">
+                      <Lock className="w-3.5 h-3.5" />
+                      Locked
+                    </span>
+                  )}
                 </div>
 
-                <ul className="space-y-2.5">
-                  {activePlan.topics.map((topic, idx) => {
-                    const total = topic.done.length + topic.todo.length;
-                    const isOpen = expanded.has(topic.topicId);
-                    const isCurrent = idx === currentTopicIndex;
-                    const isFuture =
-                      currentTopicIndex >= 0 && idx > currentTopicIndex;
-
-                    const displayStatus = isTopicFullyDone(topic)
-                      ? "completed"
-                      : isCurrent
-                        ? "in_progress"
-                        : "pending";
-
-                    // Sessions after the first one in the current topic are locked
-                    const lockedAhead = isCurrent ? topic.todo.slice(1) : [];
-
-                    return (
-                      <li
-                        key={topic.topicId}
-                        className={cn(
-                          "rounded-[var(--r-card)] border bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden",
-                          isCurrent
-                            ? "border-[var(--brand)]"
-                            : "border-[var(--line)]"
-                        )}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleTopic(topic.topicId)}
-                          className="w-full text-left px-4 py-3.5 flex items-center gap-3 hover:bg-[var(--surface-2)]"
-                        >
-                          <span className="w-6 h-6 rounded-full grid place-items-center text-[10.5px] font-bold flex-none bg-[var(--surface-3)] text-[var(--ink-3)]">
-                            {idx + 1}
-                          </span>
-
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[13px] font-bold text-[var(--ink)] truncate">
-                              {topic.topicTitle}
-                            </span>
-                            <span className="block text-[11px] text-[var(--ink-3)] font-semibold mt-0.5">
-                              {topic.done.length}/{total} sessions
-                              {isFuture &&
-                                topic.todo[0] &&
-                                ` · starts ${topic.todo[0].scheduledDate}`}
-                            </span>
-                          </span>
-
-                          <StatusPill status={displayStatus} />
-
-                          <ChevronRight
-                            className={cn(
-                              "w-4 h-4 flex-none text-[var(--ink-4)] transition-transform",
-                              isOpen && "rotate-90"
-                            )}
-                          />
-                        </button>
-
-                        {isOpen && (
-                          <div className="px-4 pb-3.5 pt-1 border-t border-[var(--line-soft)] space-y-2">
-                            {/* Completed sessions */}
-                            {topic.done.length > 0 && (
-                              <div className="mt-2 space-y-1.5">
-                                <p className="text-[10px] font-bold tracking-[0.12em] uppercase text-[var(--ink-4)] mb-1.5">
-                                  Completed
-                                </p>
-                                {topic.done.map((s) => (
-                                  <div
-                                    key={s.id}
-                                    className="rounded-[10px] border border-[var(--line-soft)] bg-[var(--surface-2)] px-3.5 py-2.5 flex items-center gap-3"
-                                  >
-                                    <CheckCircle2 className="w-4 h-4 text-[var(--ok)] flex-none" />
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-[12.5px] font-bold text-[var(--ink)]">
-                                        Day {s.sessionDayNumber}
-                                      </p>
-                                      <p className="text-[11px] font-semibold text-[var(--ink-3)]">
-                                        {s.scheduledDate}
-                                      </p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        router.push(`/students/session/${s.id}`)
-                                      }
-                                      className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[7px] text-[11px] font-bold bg-[var(--surface-3)] text-[var(--ink-2)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] flex-none"
-                                    >
-                                      Review
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Current reachable session */}
-                            {isCurrent && activeSession && (
-                              <div className="mt-2">
-                                {topic.done.length > 0 && (
-                                  <p className="text-[10px] font-bold tracking-[0.12em] uppercase text-[var(--ink-4)] mb-1.5">
-                                    Now
-                                  </p>
-                                )}
-                                <div className="rounded-[10px] border-2 border-[var(--brand)] bg-[var(--brand-soft)] px-3.5 py-3 flex items-center gap-3">
-                                  <PlayCircle className="w-5 h-5 text-[var(--brand)] flex-none" />
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-[12.5px] font-bold text-[var(--brand)]">
-                                      Day {activeSession.sessionDayNumber} ·{" "}
-                                      {activeSession.scheduledDate}
-                                    </p>
-                                    <p className="text-[11px] font-semibold text-[var(--brand)] opacity-80">
-                                      {isPastDate(activeSession.scheduledDate)
-                                        ? "Overdue — catch up now"
-                                        : "Ready to start"}
-                                    </p>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      router.push(
-                                        `/students/session/${activeSession.id}`
-                                      )
-                                    }
-                                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[11.5px] font-bold bg-[var(--brand)] text-white flex-none"
-                                  >
-                                    Open
-                                    <ArrowRight className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Locked sessions (rest of current topic OR whole future topic) */}
-                            {(isCurrent
-                              ? lockedAhead
-                              : isFuture
-                                ? topic.todo
-                                : []
-                            ).length > 0 && (
-                              <div className="mt-2 space-y-1.5">
-                                <p className="text-[10px] font-bold tracking-[0.12em] uppercase text-[var(--ink-4)] mb-1.5">
-                                  {isFuture ? "Upcoming" : "Coming up"}
-                                </p>
-                                {(isCurrent ? lockedAhead : topic.todo).map(
-                                  (s) => (
-                                    <div
-                                      key={s.id}
-                                      className="rounded-[10px] border border-[var(--line-soft)] px-3.5 py-2.5 flex items-center gap-3 opacity-70"
-                                    >
-                                      <Lock className="w-3.5 h-3.5 text-[var(--ink-4)] flex-none" />
-                                      <div className="min-w-0 flex-1">
-                                        <p className="text-[12.5px] font-bold text-[var(--ink-3)]">
-                                          Day {s.sessionDayNumber}
-                                        </p>
-                                        <p className="text-[11px] font-semibold text-[var(--ink-4)]">
-                                          {s.scheduledDate}
-                                        </p>
-                                      </div>
-                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--surface-3)] text-[var(--ink-4)] flex-none">
-                                        Locked
-                                      </span>
-                                    </div>
-                                  )
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
+                {/* AI Feedback row — only for completed days for now */}
+                {isDone && (
+                  <div className="mt-2.5 pt-2.5 border-t border-[var(--line-soft)]">
+                    <Link
+                      href={`/students/feedback/${s.id}`}
+                      className="flex items-center justify-center h-9 rounded-[9px] text-[12px] font-bold text-[var(--brand)] bg-[var(--brand-soft)] hover:opacity-90 transition"
+                    >
+                      View AI Feedback
+                    </Link>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  })}
+</section>
             )}
 
             {otherPlans.length > 0 && (
