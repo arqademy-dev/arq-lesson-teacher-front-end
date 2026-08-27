@@ -603,32 +603,9 @@ export default function StudentLearningPlanPage() {
     );
   })}
 </section>
-            )}
+  )}
 
-            {otherPlans.length > 0 && (
-              <section className="mt-8">
-                <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)] mb-3">
-                  Past plans
-                </p>
-                <ul className="space-y-2">
-                  {otherPlans.map((plan) => (
-                    <li
-                      key={plan.planId}
-                      className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] px-4 py-3 flex items-center justify-between gap-3"
-                    >
-                      <span className="text-[12.5px] font-bold text-[var(--ink)] capitalize">
-                        {plan.status}
-                      </span>
-                      <span className="text-[11px] text-[var(--ink-3)] font-semibold">
-                        {plan.startDate}
-                        {plan.endDate ? ` – ${plan.endDate}` : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-          </>
+       </>
         )}
       </main>
     </div>

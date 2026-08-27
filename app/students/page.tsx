@@ -75,7 +75,7 @@ export default function StudentDashboardPage() {
       <div className="bg-grid" />
       <div className="bg-glow" />
 
-      {/* Header — Profile beside Sign out */}
+      {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--canvas)_82%,transparent)] backdrop-blur-[14px]">
         <div className="flex items-center gap-2.5">
           <span className="font-heading font-semibold text-[13px] tracking-[0.155em] text-[var(--ink)]">
@@ -103,28 +103,18 @@ export default function StudentDashboardPage() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-3xl mx-auto px-6 py-10">
+      <main className="relative z-10 max-w-3xl mx-auto px-6 py-10 pb-28">
         <p className="text-[9.5px] font-bold tracking-[0.18em] uppercase text-[var(--brand)] mb-2">
           Dashboard
         </p>
 
-        {/* Welcome + Community opposite each other */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="font-heading text-[22px] text-[var(--ink)]">
-              {fullName ? `Welcome, ${me?.firstName?.trim()}` : "Welcome back"}
-            </h1>
-            <p className="mt-1.5 text-[13px] text-[var(--ink-3)]">
-              Your plan, progress, and next step.
-            </p>
-          </div>
-          <Link
-            href="/students/community"
-            className="inline-flex items-center gap-2 h-10 px-3.5 rounded-[10px] text-[12.5px] font-bold border border-[var(--line)] bg-[var(--surface)] text-[var(--ink-2)] hover:border-[var(--brand)] hover:text-[var(--brand)] shadow-[var(--shadow-sm)] flex-none"
-          >
-            <MessageCircle className="w-4 h-4" />
-            Community
-          </Link>
+        <div>
+          <h1 className="font-heading text-[22px] text-[var(--ink)]">
+            {fullName ? `Welcome, ${me?.firstName?.trim()}` : "Welcome back"}
+          </h1>
+          <p className="mt-1.5 text-[13px] text-[var(--ink-3)]">
+            Your plan, progress, and next step.
+          </p>
         </div>
 
         {loading && (
@@ -168,35 +158,39 @@ export default function StudentDashboardPage() {
                 )}
               </div>
 
-              <div className="px-5 py-4 space-y-3">
+              <div className="px-5 py-5">
                 {payments?.hasSuccessfulPayment ? (
                   <Link
                     href="/students/learning-plan"
                     className={cn(
-                      "mt-1 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
-                      "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)] transition-colors"
+                      "inline-flex items-center justify-center gap-3 h-14 px-8 rounded-[14px] w-full sm:w-auto",
+                      "text-[15px] font-heading font-bold text-white",
+                      "bg-[var(--brand)] hover:bg-[var(--brand-ink)]",
+                      "shadow-lg hover:shadow-xl hover:scale-[1.015] active:scale-[0.99] transition-all"
                     )}
                   >
-                    <BookOpen className="w-4 h-4" />
+                    <BookOpen className="w-5 h-5" />
                     Continue learning
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-5 h-5" />
                   </Link>
                 ) : payments?.hasPendingPayment ? (
-                  <div className="mt-1 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold bg-[var(--warn-soft)] text-[var(--warn)]">
-                    <CreditCard className="w-4 h-4" />
+                  <div className="inline-flex items-center justify-center gap-3 h-14 px-8 rounded-[14px] w-full sm:w-auto text-[15px] font-bold bg-[var(--warn-soft)] text-[var(--warn)]">
+                    <CreditCard className="w-5 h-5" />
                     Payment pending approval
                   </div>
                 ) : (
                   <Link
                     href="/students/learning-plan"
                     className={cn(
-                      "mt-1 inline-flex items-center gap-2 h-10 px-4 rounded-[var(--r-ctl)] text-[12.5px] font-bold",
-                      "bg-[var(--danger)] text-white hover:opacity-90 transition-opacity"
+                      "inline-flex items-center justify-center gap-3 h-14 px-8 rounded-[14px] w-full sm:w-auto",
+                      "text-[15px] font-heading font-bold text-white",
+                      "bg-[var(--danger)] hover:opacity-90",
+                      "shadow-lg hover:shadow-xl hover:scale-[1.015] active:scale-[0.99] transition-all"
                     )}
                   >
-                    <CreditCard className="w-4 h-4" />
+                    <CreditCard className="w-5 h-5" />
                     Make payment to unlock
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-5 h-5" />
                   </Link>
                 )}
               </div>
@@ -204,6 +198,15 @@ export default function StudentDashboardPage() {
           </>
         )}
       </main>
+
+      {/* Community — fixed, stays put through scroll */}
+      <Link
+        href="/students/community"
+        className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-40 inline-flex items-center gap-2 h-12 px-5 rounded-full text-[13px] font-bold bg-[var(--surface)] text-[var(--ink-2)] border border-[var(--line)] shadow-lg hover:shadow-xl hover:border-[var(--brand)] hover:text-[var(--brand)] transition-all"
+      >
+        <MessageCircle className="w-[18px] h-[18px]" />
+        Community
+      </Link>
     </div>
   );
 }

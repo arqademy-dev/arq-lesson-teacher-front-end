@@ -1,6 +1,7 @@
 import type { Resource, SubmissionResult, InteractionAnswer } from "../types";
 import { ArticleBody } from "./ArticleBody";
 import { InteractiveVideoPlayer } from "./Interactivevideoplayer";
+import { SimpleYouTubePlayer } from "./Simpleyoutubeplayer ";
 
 type Props = {
   resource: Resource;
@@ -101,23 +102,16 @@ export function ResourceRenderer({
       );
     }
 
-    // Plain video (file, or YouTube with no checkpoints) — unchanged behavior.
     const isYouTube = isYouTubeUrl(url);
     return (
       <div className="space-y-3">
         <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)]">
           {resource.title}
         </h2>
-        <div className="relative w-full overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--navy)] aspect-video">
-          {isYouTube ? (
-            <iframe
-              src={toYouTubeEmbed(url)}
-              title={resource.title}
-              className="absolute inset-0 w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          ) : url && url !== "string" ? (
+        {isYouTube ? (
+          <SimpleYouTubePlayer videoUrl={url} />
+        ) : url && url !== "string" ? (
+          <div className="relative w-full overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--navy)] aspect-video">
             <video
               src={url}
               controls
@@ -127,12 +121,14 @@ export function ResourceRenderer({
                 onVideoTimeUpdate?.(Math.floor(e.currentTarget.currentTime))
               }
             />
-          ) : (
+          </div>
+        ) : (
+          <div className="relative w-full overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--navy)] aspect-video">
             <div className="absolute inset-0 grid place-items-center text-[13px] text-white/50 font-semibold px-4 text-center">
               No video URL for this resource yet.
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -146,7 +142,7 @@ export function ResourceRenderer({
         <iframe
           src={resource.urlOrPath}
           title={resource.title}
-          className="w-full h-[480px] rounded-[12px] border border-[var(--line)] bg-[var(--surface)]"
+          className="w-full h-[420px] sm:h-[480px] rounded-[12px] border border-[var(--line)] bg-[var(--surface)]"
         />
         <a
           href={resource.urlOrPath}
@@ -172,24 +168,14 @@ export function ResourceRenderer({
           {resource.title}
         </h2>
 
-        {isYouTube && (
-          <div className="relative w-full overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--navy)] aspect-video">
-            <iframe
-              src={toYouTubeEmbed(url)}
-              title={resource.title}
-              className="absolute inset-0 w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-        )}
+        {isYouTube && <SimpleYouTubePlayer videoUrl={url} />}
 
         {isPdf && (
           <div className="space-y-2">
             <iframe
               src={url}
               title={resource.title}
-              className="w-full h-[420px] rounded-[12px] border border-[var(--line)] bg-[var(--surface)]"
+              className="w-full h-[380px] sm:h-[420px] rounded-[12px] border border-[var(--line)] bg-[var(--surface)]"
             />
             <a
               href={url}
@@ -223,18 +209,4 @@ export function ResourceRenderer({
       </p>
     </div>
   );
-}
-
-function toYouTubeEmbed(url: string): string {
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes("youtu.be")) {
-      return `https://www.youtube.com/embed/${u.pathname.slice(1)}`;
-    }
-    const id = u.searchParams.get("v");
-    if (id) return `https://www.youtube.com/embed/${id}`;
-  } catch {
-    /* ignore */
-  }
-  return url;
 }

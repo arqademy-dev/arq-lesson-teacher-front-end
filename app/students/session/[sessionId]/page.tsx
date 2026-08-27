@@ -201,7 +201,7 @@ export default function StudentSessionPage() {
   if (error || !data) {
     return (
       <Shell>
-        <div className="max-w-lg mx-auto py-16 text-center space-y-3">
+        <div className="max-w-lg mx-auto py-16 text-center space-y-3 px-4">
           <p className="text-[13px] text-[var(--danger)] font-semibold">
             {error || "No active session."}
           </p>
@@ -228,7 +228,7 @@ export default function StudentSessionPage() {
   if (completed) {
     return (
       <Shell>
-        <div className="max-w-lg mx-auto py-16 text-center">
+        <div className="max-w-lg mx-auto py-16 text-center px-4">
           <CheckCircle2 className="w-12 h-12 text-[var(--ok)] mx-auto mb-4" />
           <h1 className="font-heading text-[22px] text-[var(--ink)]">
             Session complete
@@ -251,10 +251,10 @@ export default function StudentSessionPage() {
 
   return (
     <Shell isReview={isReviewMode}>
-      <main className="relative z-10 max-w-4xl mx-auto px-6 py-8">
+      <main className="relative z-10 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-7">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
-          <div>
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-5 sm:mb-6">
+          <div className="min-w-0">
             <p className="text-[9.5px] font-bold tracking-[0.18em] uppercase text-[var(--brand)] mb-1">
               Day {session.sessionDayNumber}
               {isReviewMode && (
@@ -264,50 +264,35 @@ export default function StudentSessionPage() {
                 <span className="ml-2 text-[var(--warn)]">· Catch-up</span>
               )}
             </p>
-            <h1 className="font-heading text-[22px] text-[var(--ink)]">
+            <h1 className="font-heading text-[19px] sm:text-[22px] text-[var(--ink)] leading-tight">
               {topic.title}
             </h1>
-            {topic.description && topic.description !== "string" && (
-              <p className="mt-1.5 text-[13px] text-[var(--ink-3)] max-w-[52ch]">
-                {topic.description}
-              </p>
-            )}
-            <p className="mt-2 text-[11.5px] text-[var(--ink-4)] font-semibold">
-              Scheduled · {session.scheduledDate}
-              {!isReviewMode &&
-                requireCorrect &&
-                allElementIds.length > 0 && (
-                  <span className="ml-2">
-                    · Checks {answeredCorrect}/{allElementIds.length} correct
-                  </span>
-                )}
-            </p>
           </div>
 
           {!isReviewMode && isOverdue && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-[9px] bg-[var(--warn-soft)] text-[var(--warn)] text-[12px] font-bold">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-[9px] bg-[var(--warn-soft)] text-[var(--warn)] text-[12px] font-bold flex-none">
               <AlertTriangle className="w-4 h-4" />
               Finish this before new sessions unlock
             </div>
           )}
 
           {isReviewMode && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-[9px] bg-[var(--ok-soft)] text-[var(--ok)] text-[12px] font-bold">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-[9px] bg-[var(--ok-soft)] text-[var(--ok)] text-[12px] font-bold flex-none">
               <CheckCircle2 className="w-4 h-4" />
               Completed session
             </div>
           )}
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
-          {/* Resource list */}
-          <aside className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] h-fit overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4 lg:gap-6">
+          {/* Resource list — desktop only, sticky while the stage scrolls */}
+          <aside className="hidden lg:block rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] h-fit lg:sticky lg:top-5 overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--line-soft)]">
               <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
                 {isReviewMode ? "Parts" : "Today's parts"}
               </p>
             </div>
-            <div className="p-2">
+            <div className="p-2 max-h-[calc(100vh-140px)] overflow-y-auto">
               {resources.map((r, idx) => {
                 const active = r.id === activeResource?.id;
                 const els = r.interactiveElements || [];
@@ -341,19 +326,51 @@ export default function StudentSessionPage() {
           </aside>
 
           {/* Stage */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
+            {/* Resource nav — mobile only, horizontal scroll strip */}
+            {resources.length > 0 && (
+              <div className="lg:hidden -mx-4 sm:-mx-6 px-4 sm:px-6 overflow-x-auto">
+                <div className="flex gap-2 w-max pb-1">
+                  {resources.map((r, idx) => {
+                    const active = r.id === activeResource?.id;
+                    const els = r.interactiveElements || [];
+                    const doneCount = els.filter(
+                      (el) => results[el.id]?.isCorrect === true
+                    ).length;
+                    const total = els.length;
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setActiveResourceId(r.id)}
+                        className={cn(
+                          "flex-none px-3 py-2 rounded-full text-[12px] font-bold whitespace-nowrap border-2 transition-colors",
+                          active
+                            ? "bg-[var(--brand)] border-[var(--brand)] text-white"
+                            : "bg-[var(--surface)] border-[var(--line)] text-[var(--ink-2)]"
+                        )}
+                      >
+                        {idx + 1}. {r.title}
+                        {total > 0 && ` · ${doneCount}/${total}`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {activeResource ? (
               <div className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
-                <div className="px-5 py-4 border-b border-[var(--line-soft)] flex items-center gap-2">
-                  <span className="text-[10px] font-bold tracking-wider uppercase text-[var(--ink-3)] bg-[var(--surface-3)] px-2 py-0.5 rounded">
+                <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-[var(--line-soft)] flex items-center gap-2 min-w-0">
+                  <span className="text-[10px] font-bold tracking-wider uppercase text-[var(--ink-3)] bg-[var(--surface-3)] px-2 py-0.5 rounded flex-none">
                     {activeResource.resourceType}
                   </span>
-                  <span className="text-[12.5px] font-bold text-[var(--ink)]">
+                  <span className="text-[12.5px] font-bold text-[var(--ink)] truncate">
                     {activeResource.title}
                   </span>
                 </div>
 
-                <div className="px-5 py-5">
+                <div className="px-4 sm:px-5 py-4 sm:py-5">
                   <ResourceRenderer
                     resource={activeResource}
                     requireCorrectAnswersToProgress={requireCorrect}
@@ -423,37 +440,48 @@ export default function StudentSessionPage() {
                 </Link>
               </div>
             ) : (
-              <div className="pt-2 flex flex-col items-end gap-2">
-                <button
-                  type="button"
-                  onClick={handleComplete}
-                  disabled={completing || !canComplete}
+              <div className="sticky bottom-3 lg:static z-30">
+                <div
                   className={cn(
-                    "inline-flex items-center gap-2 h-11 px-5 rounded-[10px] text-[13px] font-heading font-semibold",
-                    canComplete
-                      ? "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)]"
-                      : "bg-[var(--surface-3)] text-[var(--ink-4)] cursor-not-allowed",
-                    "disabled:opacity-70"
+                    "rounded-[14px] px-4 py-3 flex flex-col items-stretch sm:items-end gap-2",
+                    "border border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md shadow-lg",
+                    "lg:border-0 lg:bg-transparent lg:backdrop-blur-none lg:shadow-none lg:px-0 lg:py-0"
                   )}
                 >
-                  {completing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Completing…
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      Mark session complete
-                    </>
-                  )}
-                </button>
-                {!canComplete && requireCorrect && allElementIds.length > 0 && (
-                  <p className="text-[12px] text-[var(--warn)] font-semibold text-right max-w-sm">
-                    Answer every check correctly before you can finish this
-                    session ({answeredCorrect}/{allElementIds.length}).
-                  </p>
-                )}
+                  <button
+                    type="button"
+                    onClick={handleComplete}
+                    disabled={completing || !canComplete}
+                    className={cn(
+                      "w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-5 rounded-[10px] text-[13px] font-heading font-semibold",
+                      canComplete
+                        ? "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)]"
+                        : "bg-[var(--surface-3)] text-[var(--ink-4)] cursor-not-allowed",
+                      "disabled:opacity-70"
+                    )}
+                  >
+                    {completing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Completing…
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        Mark session complete
+                      </>
+                    )}
+                  </button>
+                  {!canComplete &&
+                    requireCorrect &&
+                    allElementIds.length > 0 && (
+                      <p className="text-[12px] text-[var(--warn)] font-semibold text-right max-w-sm">
+                        Answer every check correctly before you can finish
+                        this session ({answeredCorrect}/{allElementIds.length}
+                        ).
+                      </p>
+                    )}
+                </div>
               </div>
             )}
           </div>
@@ -474,7 +502,7 @@ function Shell({
     <div className="relative min-h-screen">
       <div className="bg-grid" />
       <div className="bg-glow" />
-      <header className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--canvas)_82%,transparent)] backdrop-blur-[14px]">
+      <header className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-4 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--canvas)_82%,transparent)] backdrop-blur-[14px]">
         <Link
           href="/students/learning-plan"
           className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[var(--ink-2)] hover:text-[var(--brand)]"
