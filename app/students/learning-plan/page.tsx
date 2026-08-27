@@ -17,12 +17,14 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CreditCard,
   Loader2,
   Lock,
   PlayCircle,
   User,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +60,10 @@ export default function StudentLearningPlanPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Which completed day's action dropdown (Review / AI Feedback) is open —
+  // a single id, not a Set, so only one can ever be open at once.
+  const [openActionsId, setOpenActionsId] = useState<string | null>(null);
 
   const [initiating, setInitiating] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -122,13 +128,6 @@ export default function StudentLearningPlanPage() {
 
   const activeSession = currentTopic?.todo[0] ?? null;
 
-  // Auto-expand the topic that has remaining work
-  // useEffect(() => {
-  //   if (currentTopic) {
-  //     setExpanded((prev) => new Set(prev).add(currentTopic.topicId));
-  //   }
-  // }, [currentTopic]);
-
   function toggleTopic(topicId: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -136,6 +135,20 @@ export default function StudentLearningPlanPage() {
       else next.add(topicId);
       return next;
     });
+  }
+
+  function openWeek(topicId: string) {
+    setExpanded(new Set([topicId]));
+    setOpenActionsId(null);
+  }
+
+  function closeWeek() {
+    setExpanded(new Set());
+    setOpenActionsId(null);
+  }
+
+  function toggleDayActions(sessionId: string) {
+    setOpenActionsId((prev) => (prev === sessionId ? null : sessionId));
   }
 
   async function handleInitiatePayment() {
@@ -282,330 +295,351 @@ export default function StudentLearningPlanPage() {
                 </div>
               </section>
             ) : (
-// {/* ── Topics as Week grid + modal ── */}
-<section className="mt-6">
-  <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-    <div>
-      <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
-        Study plan
-      </p>
-      <p className="text-[12px] text-[var(--ink-3)] font-semibold mt-0.5">
-        {activePlan.topics.length} weeks ·{" "}
-        {activePlan.topics.filter((t) => isTopicFullyDone(t)).length} completed
-      </p>
-    </div>
-    <span className="text-[11px] font-bold text-[var(--ink-3)] capitalize">
-      {activePlan.status}
-    </span>
-  </div>
+              /* ── Topics as Week grid + modal ── */
+              <section className="mt-6">
+                <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                  <div>
+                    <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
+                      Study plan
+                    </p>
+                    <p className="text-[12px] text-[var(--ink-3)] font-semibold mt-0.5">
+                      {activePlan.topics.length} weeks ·{" "}
+                      {activePlan.topics.filter((t) => isTopicFullyDone(t)).length}{" "}
+                      completed
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold text-[var(--ink-3)] capitalize">
+                    {activePlan.status}
+                  </span>
+                </div>
 
-  {/* Progress bar */}
-  {(() => {
-    const totalSessions = activePlan.topics.reduce(
-      (n, t) => n + t.done.length + t.todo.length,
-      0
-    );
-    const doneSessions = activePlan.topics.reduce(
-      (n, t) => n + t.done.length,
-      0
-    );
-    const pct =
-      totalSessions > 0 ? Math.round((doneSessions / totalSessions) * 100) : 0;
-    return (
-      <div className="mb-5">
-        <div className="flex justify-between text-[11px] font-bold text-[var(--ink-3)] mb-1.5">
-          <span>
-            Week {currentTopicIndex >= 0 ? currentTopicIndex + 1 : "—"} of{" "}
-            {activePlan.topics.length}
-          </span>
-          <span>{pct}%</span>
-        </div>
-        <div className="h-1.5 rounded-full bg-[var(--surface-3)] overflow-hidden">
-          <div
-            className="h-full rounded-full bg-[var(--brand)] transition-all"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
-    );
-  })()}
+                {/* Progress bar */}
+                {(() => {
+                  const totalSessions = activePlan.topics.reduce(
+                    (n, t) => n + t.done.length + t.todo.length,
+                    0
+                  );
+                  const doneSessions = activePlan.topics.reduce(
+                    (n, t) => n + t.done.length,
+                    0
+                  );
+                  const pct =
+                    totalSessions > 0
+                      ? Math.round((doneSessions / totalSessions) * 100)
+                      : 0;
+                  return (
+                    <div className="mb-5">
+                      <div className="flex justify-between text-[11px] font-bold text-[var(--ink-3)] mb-1.5">
+                        <span>
+                          Week {currentTopicIndex >= 0 ? currentTopicIndex + 1 : "—"}{" "}
+                          of {activePlan.topics.length}
+                        </span>
+                        <span>{pct}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-[var(--surface-3)] overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[var(--brand)] transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
 
-  {/* Week cards — lighter default, darker when current / selected */}
-<div className="grid grid-cols-2 gap-3">
-  {activePlan.topics.map((topic, idx) => {
-    const total = topic.done.length + topic.todo.length;
-    const doneCount = topic.done.length;
-    const isCurrent = idx === currentTopicIndex;
-    const isDone = isTopicFullyDone(topic);
-    const isFuture = currentTopicIndex >= 0 && idx > currentTopicIndex;
+                {/* Week cards — lighter default, darker when current / selected */}
+                <div className="grid grid-cols-2 gap-3">
+                  {activePlan.topics.map((topic, idx) => {
+                    const total = topic.done.length + topic.todo.length;
+                    const doneCount = topic.done.length;
+                    const isCurrent = idx === currentTopicIndex;
+                    const isDone = isTopicFullyDone(topic);
+                    const isFuture = currentTopicIndex >= 0 && idx > currentTopicIndex;
 
-    return (
-      <button
-        key={topic.topicId}
-        type="button"
-        onClick={() => setExpanded(new Set([topic.topicId]))}
-        className={cn(
-          "rounded-[14px] border text-left p-4 min-h-[100px] flex flex-col justify-between transition-colors",
-          // Completed — solid brand
-          isDone &&
-            "bg-[var(--brand)] border-[var(--brand)] text-white shadow-sm",
-          // Active / current — darker surface + brand border
-          isCurrent &&
-            !isDone &&
-            "bg-[color-mix(in_srgb,var(--brand)_12%,var(--surface))] border-[var(--brand)] shadow-sm",
-          // Locked (future) — very light + muted
-          isFuture &&
-            "bg-[var(--surface)] border-[var(--line-soft)] opacity-70",
-          // Default (other) — light surface
-          !isDone &&
-            !isCurrent &&
-            !isFuture &&
-            "bg-[var(--surface)] border-[var(--line)] hover:bg-[color-mix(in_srgb,var(--brand)_6%,var(--surface))]"
-        )}
-      >
-        <div className="flex items-start justify-between gap-2 w-full">
-          <div>
-            <p
-              className={cn(
-                "text-[10px] font-bold tracking-[0.14em] uppercase",
-                isDone ? "text-white/80" : "text-[var(--ink-3)]"
-              )}
-            >
-              Week
-            </p>
-            <p
-              className={cn(
-                "font-heading text-[22px] font-semibold leading-none mt-1",
-                isDone ? "text-white" : "text-[var(--ink)]"
-              )}
-            >
-              {idx + 1}
-            </p>
-          </div>
-          {isDone && (
-            <span className="w-6 h-6 rounded-full bg-white/20 grid place-items-center flex-none">
-              <CheckCircle2 className="w-4 h-4 text-white" />
-            </span>
-          )}
-        </div>
-
-        <div className="mt-3 w-full">
-          <p
-            className={cn(
-              "text-[12px] font-bold truncate",
-              isDone ? "text-white" : "text-[var(--ink)]"
-            )}
-          >
-            {isDone
-              ? "Completed"
-              : isFuture
-                ? "Locked"
-                : `${doneCount}/${total || 0} done`}
-          </p>
-          <p
-            className={cn(
-              "text-[10.5px] font-semibold mt-0.5 truncate",
-              isDone ? "text-white/75" : "text-[var(--ink-3)]"
-            )}
-          >
-            {topic.topicTitle.replace(/^Week\s*\d+:\s*/i, "") ||
-              topic.topicTitle}
-          </p>
-        </div>
-      </button>
-    );
-  })}
-</div>
-
-  {/* ── Week detail POPUP ── */}
-  {Array.from(expanded).map((topicId) => {
-    const idx = activePlan.topics.findIndex((t) => t.topicId === topicId);
-    if (idx < 0) return null;
-    const topic = activePlan.topics[idx];
-    const isCurrent = idx === currentTopicIndex;
-    const isFuture = currentTopicIndex >= 0 && idx > currentTopicIndex;
-
-    const allDays = [
-      ...topic.done.map((s) => ({ ...s, _state: "done" as const })),
-      ...topic.todo.map((s, i) => ({
-        ...s,
-        _state:
-          isCurrent && i === 0 ? ("now" as const) : ("locked" as const),
-      })),
-    ];
-
-    return (
-      <div
-        key={topicId}
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-        role="dialog"
-        aria-modal="true"
-      >
-        {/* Backdrop */}
-        <button
-          type="button"
-          className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
-          onClick={() => setExpanded(new Set())}
-          aria-label="Close"
-        />
-
-        {/* Panel */}
-        <div className="relative z-10 w-full max-w-lg max-h-[88vh] sm:max-h-[85vh] mx-0 sm:mx-4 rounded-t-[20px] sm:rounded-[20px] bg-[var(--surface)] border border-[var(--line)] shadow-xl flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-[var(--line-soft)] flex-none">
-            <div className="min-w-0">
-              <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--brand)]">
-                Week {idx + 1}
-              </p>
-              <h2 className="font-heading text-[17px] font-semibold text-[var(--ink)] mt-0.5 truncate">
-                {topic.topicTitle}
-              </h2>
-              <p className="text-[11px] text-[var(--ink-3)] font-semibold mt-1">
-                {topic.done.length}/{topic.done.length + topic.todo.length} sessions
-                {isFuture && " · Locked until previous weeks are done"}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setExpanded(new Set())}
-              className="w-9 h-9 rounded-full grid place-items-center bg-[var(--surface-3)] text-[var(--ink-2)] hover:bg-[var(--surface-2)] flex-none text-[18px] leading-none font-bold"
-              aria-label="Close"
-            >
-              ×
-            </button>
-          </div>
-
-          {/* Days list (scrollable) */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-            {allDays.length === 0 ? (
-              <p className="text-[13px] text-[var(--ink-3)] text-center py-8">
-                No sessions in this week yet.
-              </p>
-            ) : (
-              allDays.map((s) => {
-                const isDone = s._state === "done";
-                const isNow = s._state === "now";
-                const isLocked = s._state === "locked";
-
-                return (
-                  <div
-                    key={s.id}
-                    className={cn(
-                      "rounded-[12px] border px-4 py-3",
-                      isNow
-                        ? "border-[var(--brand)] bg-[var(--brand-soft)]"
-                        : "border-[var(--line-soft)] bg-[var(--surface)]"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
+                    return (
+                      <button
+                        key={topic.topicId}
+                        type="button"
+                        onClick={() => openWeek(topic.topicId)}
                         className={cn(
-                          "w-8 h-8 rounded-[9px] grid place-items-center text-[12px] font-bold flex-none",
-                          isDone && "bg-[var(--ok)] text-white",
-                          isNow && "bg-[var(--brand)] text-white",
-                          isLocked &&
-                            "bg-[var(--surface-3)] text-[var(--ink-4)]"
+                          "rounded-[14px] border text-left p-4 min-h-[100px] flex flex-col justify-between transition-colors",
+                          isDone &&
+                            "bg-[var(--brand)] border-[var(--brand)] text-white shadow-sm",
+                          isCurrent &&
+                            !isDone &&
+                            "bg-[color-mix(in_srgb,var(--brand)_12%,var(--surface))] border-[var(--brand)] shadow-sm",
+                          isFuture &&
+                            "bg-[var(--surface)] border-[var(--line-soft)] opacity-70",
+                          !isDone &&
+                            !isCurrent &&
+                            !isFuture &&
+                            "bg-[var(--surface)] border-[var(--line)] hover:bg-[color-mix(in_srgb,var(--brand)_6%,var(--surface))]"
                         )}
                       >
-                        {isDone ? (
-                          <CheckCircle2 className="w-4 h-4" />
-                        ) : (
-                          s.sessionDayNumber
-                        )}
-                      </span>
+                        <div className="flex items-start justify-between gap-2 w-full">
+                          <div>
+                            <p
+                              className={cn(
+                                "text-[10px] font-bold tracking-[0.14em] uppercase",
+                                isDone ? "text-white/80" : "text-[var(--ink-3)]"
+                              )}
+                            >
+                              Week
+                            </p>
+                            <p
+                              className={cn(
+                                "font-heading text-[22px] font-semibold leading-none mt-1",
+                                isDone ? "text-white" : "text-[var(--ink)]"
+                              )}
+                            >
+                              {idx + 1}
+                            </p>
+                          </div>
+                          {isDone && (
+                            <span className="w-6 h-6 rounded-full bg-white/20 grid place-items-center flex-none">
+                              <CheckCircle2 className="w-4 h-4 text-white" />
+                            </span>
+                          )}
+                        </div>
 
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-bold text-[var(--ink)]">
-                          Day {s.sessionDayNumber}
-                        </p>
-                        <p className="text-[11px] font-semibold text-[var(--ink-3)]">
-                          {s.scheduledDate}
-                        </p>
-                      </div>
+                        <div className="mt-3 w-full">
+                          <p
+                            className={cn(
+                              "text-[12px] font-bold truncate",
+                              isDone ? "text-white" : "text-[var(--ink)]"
+                            )}
+                          >
+                            {isDone
+                              ? "Completed"
+                              : isFuture
+                                ? "Locked"
+                                : `${doneCount}/${total || 0} done`}
+                          </p>
+                          <p
+                            className={cn(
+                              "text-[10.5px] font-semibold mt-0.5 truncate",
+                              isDone ? "text-white/75" : "text-[var(--ink-3)]"
+                            )}
+                          >
+                            {topic.topicTitle.replace(/^Week\s*\d+:\s*/i, "") ||
+                              topic.topicTitle}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
 
-                      {isDone && (
-                        <div className="flex items-center gap-2 flex-none">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--ok-soft)] text-[var(--ok)]">
-                            Done
-                          </span>
+                {/* ── Week detail POPUP ── */}
+                {Array.from(expanded).map((topicId) => {
+                  const idx = activePlan.topics.findIndex(
+                    (t) => t.topicId === topicId
+                  );
+                  if (idx < 0) return null;
+                  const topic = activePlan.topics[idx];
+                  const isCurrent = idx === currentTopicIndex;
+                  const isFuture = currentTopicIndex >= 0 && idx > currentTopicIndex;
+
+                  const allDays = [
+                    ...topic.done.map((s) => ({ ...s, _state: "done" as const })),
+                    ...topic.todo.map((s, i) => ({
+                      ...s,
+                      _state:
+                        isCurrent && i === 0 ? ("now" as const) : ("locked" as const),
+                    })),
+                  ];
+
+                  return (
+                    <div
+                      key={topicId}
+                      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+                      role="dialog"
+                      aria-modal="true"
+                    >
+                      {/* Backdrop */}
+                      <button
+                        type="button"
+                        className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+                        onClick={closeWeek}
+                        aria-label="Close"
+                      />
+
+                      {/* Panel */}
+                      <div className="relative z-10 w-full max-w-lg max-h-[88vh] sm:max-h-[85vh] mx-0 sm:mx-4 rounded-t-[20px] sm:rounded-[20px] bg-[var(--surface)] border border-[var(--line)] shadow-xl flex flex-col overflow-hidden">
+                        {/* Header */}
+                        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-[var(--line-soft)] flex-none">
+                          <div className="min-w-0">
+                            <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--brand)]">
+                              Week {idx + 1}
+                            </p>
+                            <h2 className="font-heading text-[17px] font-semibold text-[var(--ink)] mt-0.5 truncate">
+                              {topic.topicTitle}
+                            </h2>
+                            <p className="text-[11px] text-[var(--ink-3)] font-semibold mt-1">
+                              {topic.done.length}/{topic.done.length + topic.todo.length}{" "}
+                              sessions
+                              {isFuture && " · Locked until previous weeks are done"}
+                            </p>
+                          </div>
                           <button
                             type="button"
-                            onClick={() => {
-                              setExpanded(new Set());
-                              router.push(`/students/session/${s.id}`);
-                            }}
-                            className="text-[11px] font-bold text-[var(--brand)] hover:underline"
+                            onClick={closeWeek}
+                            className="w-11 h-11 rounded-full grid place-items-center bg-[var(--surface-3)] text-[var(--ink-2)] hover:bg-[var(--surface-2)] flex-none"
+                            aria-label="Close"
                           >
-                            Review
+                            <X className="w-5 h-5" />
                           </button>
                         </div>
-                      )}
 
-                      {isNow && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setExpanded(new Set());
-                            router.push(`/students/session/${s.id}`);
-                          }}
-                          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[11.5px] font-bold bg-[var(--brand)] text-white flex-none"
-                        >
-                          Open
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                        {/* Days list (scrollable) */}
+                        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                          {allDays.length === 0 ? (
+                            <p className="text-[13px] text-[var(--ink-3)] text-center py-8">
+                              No sessions in this week yet.
+                            </p>
+                          ) : (
+                            allDays.map((s) => {
+                              const isDone = s._state === "done";
+                              const isNow = s._state === "now";
+                              const isLocked = s._state === "locked";
+                              const actionsOpen = openActionsId === s.id;
 
-                      {isLocked && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--ink-4)] flex-none">
-                          <Lock className="w-3.5 h-3.5" />
-                          Locked
-                        </span>
-                      )}
-                    </div>
+                              return (
+                                <div
+                                  key={s.id}
+                                  className={cn(
+                                    "rounded-[12px] border px-4 py-3",
+                                    isNow
+                                      ? "border-[var(--brand)] bg-[var(--brand-soft)]"
+                                      : "border-[var(--line-soft)] bg-[var(--surface)]"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span
+                                      className={cn(
+                                        "w-8 h-8 rounded-[9px] grid place-items-center text-[12px] font-bold flex-none",
+                                        isDone && "bg-[var(--ok)] text-white",
+                                        isNow && "bg-[var(--brand)] text-white",
+                                        isLocked &&
+                                          "bg-[var(--surface-3)] text-[var(--ink-4)]"
+                                      )}
+                                    >
+                                      {isDone ? (
+                                        <CheckCircle2 className="w-4 h-4" />
+                                      ) : (
+                                        s.sessionDayNumber
+                                      )}
+                                    </span>
 
-                    {/* Resources / content note */}
-                    {(isDone || isNow) && (
-                      <p className="mt-2 text-[11px] text-[var(--ink-4)] font-semibold">
-                        Resources & interactions open inside the session.
-                      </p>
-                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-[13px] font-bold text-[var(--ink)]">
+                                        Day {s.sessionDayNumber}
+                                      </p>
+                                      <p className="text-[11px] font-semibold text-[var(--ink-3)]">
+                                        {s.scheduledDate}
+                                      </p>
+                                    </div>
 
-                    {/* AI Feedback for completed days */}
-                    {isDone && (
-                      <div className="mt-2.5 pt-2.5 border-t border-[var(--line-soft)]">
-                        <Link
-                          href={`/students/feedback/${s.id}`}
-                          onClick={() => setExpanded(new Set())}
-                          className="flex items-center justify-center h-9 rounded-[9px] text-[12px] font-bold text-[var(--brand)] bg-[var(--brand-soft)] hover:opacity-90 transition"
-                        >
-                          View AI Feedback
-                        </Link>
+                                    {/* Completed day — badge + chevron toggle, actions hidden until tapped */}
+                                    {isDone && (
+                                      <div className="flex items-center gap-2 flex-none">
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--ok-soft)] text-[var(--ok)]">
+                                          Done
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleDayActions(s.id)}
+                                          className="w-7 h-7 rounded-full grid place-items-center bg-[var(--surface-3)] text-[var(--ink-2)] hover:bg-[var(--surface-2)] transition-colors"
+                                          aria-label={
+                                            actionsOpen ? "Hide actions" : "Show actions"
+                                          }
+                                          aria-expanded={actionsOpen}
+                                        >
+                                          <ChevronDown
+                                            className={cn(
+                                              "w-4 h-4 transition-transform",
+                                              actionsOpen && "rotate-180"
+                                            )}
+                                          />
+                                        </button>
+                                      </div>
+                                    )}
+
+                                    {/* Active day — Open button, unchanged */}
+                                    {isNow && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          closeWeek();
+                                          router.push(`/students/session/${s.id}`);
+                                        }}
+                                        className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[11.5px] font-bold bg-[var(--brand)] text-white flex-none"
+                                      >
+                                        Open
+                                        <ArrowRight className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+
+                                    {isLocked && (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--ink-4)] flex-none">
+                                        <Lock className="w-3.5 h-3.5" />
+                                        Locked
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Resources / content note */}
+                                  {(isDone || isNow) && (
+                                    <p className="mt-2 text-[11px] text-[var(--ink-4)] font-semibold">
+                                      Resources & interactions open inside the session.
+                                    </p>
+                                  )}
+
+                                  {/* Review / AI Feedback — collapsed behind the chevron,
+                                      only this day's grid shows at a time */}
+                                  {isDone && actionsOpen && (
+                                    <div className="mt-2.5 pt-2.5 border-t border-[var(--line-soft)] grid grid-cols-2 gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          closeWeek();
+                                          router.push(`/students/session/${s.id}`);
+                                        }}
+                                        className="h-9 rounded-[9px] text-[12px] font-bold text-[var(--ink-2)] bg-[var(--surface-3)] hover:bg-[var(--surface-2)] transition"
+                                      >
+                                        Review
+                                      </button>
+                                      <Link
+                                        href={`/students/feedback/${s.id}`}
+                                        onClick={closeWeek}
+                                        className="flex items-center justify-center h-9 rounded-[9px] text-[12px] font-bold text-[var(--brand)] bg-[var(--brand-soft)] hover:opacity-90 transition"
+                                      >
+                                        View AI Feedback
+                                      </Link>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {/* Footer close */}
+                        <div className="flex-none px-4 py-3 border-t border-[var(--line-soft)]">
+                          <button
+                            type="button"
+                            onClick={closeWeek}
+                            className="w-full h-11 rounded-[10px] text-[13px] font-bold bg-[var(--surface-3)] text-[var(--ink-2)] hover:bg-[var(--surface-2)]"
+                          >
+                            Close
+                          </button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })
+                    </div>
+                  );
+                })}
+              </section>
             )}
-          </div>
-
-          {/* Footer close */}
-          <div className="flex-none px-4 py-3 border-t border-[var(--line-soft)]">
-            <button
-              type="button"
-              onClick={() => setExpanded(new Set())}
-              className="w-full h-11 rounded-[10px] text-[13px] font-bold bg-[var(--surface-3)] text-[var(--ink-2)] hover:bg-[var(--surface-2)]"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  })}
-</section>
-  )}
-
-       </>
+          </>
         )}
       </main>
     </div>
