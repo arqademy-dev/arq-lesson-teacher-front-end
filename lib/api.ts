@@ -776,17 +776,188 @@ export async function deleteTopic(id: string) {
    ADMIN — Curriculum: Resources & Interactive Elements
    ============================================================ */
 
+/* ============================================================
+   ADMIN — Curriculum: Resources & Interactive Elements
+   ============================================================ */
+
+export type ResourceType =
+  | "video"
+  | "pdf"
+  | "article"
+  | "image"
+  | "interactive"
+  | "quiz";
+
+export type ContentBlockHeading = { type: "heading"; level: 1 | 2 | 3; text: string };
+export type ContentBlockParagraph = { type: "paragraph"; text: string };
+export type ContentBlockImage = {
+  type: "image";
+  url: string;
+  altText?: string;
+  caption?: string;
+};
+export type ContentBlockFile = {
+  type: "file";
+  url: string;
+  fileName?: string;
+  mimeType?: string;
+};
+export type ContentBlockBulletList = { type: "bullet_list"; items: string[] };
+
+export type ContentBlock =
+  | ContentBlockHeading
+  | ContentBlockParagraph
+  | ContentBlockImage
+  | ContentBlockFile
+  | ContentBlockBulletList;
+
+export type Resource = {
+  id: string;
+  topicId: string;
+  title: string;
+  resourceType: ResourceType;
+  urlOrPath: string;
+  dayNumber: number;
+  sortOrder: number;
+  /** Only meaningful when resourceType === "article" */
+  contentBody?: ContentBlock[] | null;
+};
+
 export async function listResources(topicId: string) {
-  return api(`/api/admin/curriculum/topics/${topicId}/resources`, {
+  return api<Resource[]>(`/api/admin/curriculum/topics/${topicId}/resources`, {
     skipAuthRedirect: false,
   });
 }
 
+/**
+ * NOTE: the OpenAPI request schema for this endpoint only lists
+ * title/resourceType/urlOrPath/dayNumber/sortOrder as accepted fields —
+ * contentBody isn't in the create requestBody, only in the response
+ * schema. Passing it here is an assumption; confirm with backend that
+ * POST accepts contentBody directly, or whether article bodies must be
+ * set via a follow-up PATCH.
+ */
+export async function createResource(
+  topicId: string,
+  body: {
+    title: string;
+    resourceType: ResourceType;
+    urlOrPath: string;
+    dayNumber: number;
+    sortOrder: number;
+    contentBody?: ContentBlock[];
+  }
+) {
+  return api<Resource>(`/api/admin/curriculum/topics/${topicId}/resources`, {
+    method: "POST",
+    body,
+    skipAuthRedirect: false,
+  });
+}
+
+export async function getResource(id: string) {
+  return api<Resource>(`/api/admin/curriculum/resources/${id}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+export async function updateResource(
+  id: string,
+  body: Partial<{
+    title: string;
+    resourceType: ResourceType;
+    urlOrPath: string;
+    dayNumber: number;
+    sortOrder: number;
+    contentBody: ContentBlock[];
+  }>
+) {
+  return api<Resource>(`/api/admin/curriculum/resources/${id}`, {
+    method: "PATCH",
+    body,
+    skipAuthRedirect: false,
+  });
+}
+
+export async function deleteResource(id: string) {
+  return api(`/api/admin/curriculum/resources/${id}`, {
+    method: "DELETE",
+    skipAuthRedirect: false,
+  });
+}
+
+export type InteractionType =
+  | "drag_and_drop"
+  | "fill_blank"
+  | "hotspot"
+  | "branching"
+  | "interactive_video"
+  | "image_sequencing"
+  | "multiple_choice";
+
+export type InteractiveElement = {
+  id: string;
+  resourceId: string;
+  interactionType: InteractionType;
+  /** Only used when interactionType === "interactive_video" */
+  videoTimestampSeconds?: number | null;
+  pauseOnTrigger?: boolean;
+  configSchema: Record<string, unknown>;
+  /** Admin-only. Never present on student-facing SafeInteractiveElement responses. */
+  correctAnswers?: Record<string, unknown>;
+};
+
 export async function listInteractiveElements(resourceId: string) {
-  return api(
+  return api<InteractiveElement[]>(
     `/api/admin/curriculum/resources/${resourceId}/interactive-elements`,
     { skipAuthRedirect: false }
   );
+}
+
+export async function createInteractiveElement(
+  resourceId: string,
+  body: {
+    interactionType: InteractionType;
+    videoTimestampSeconds?: number;
+    pauseOnTrigger?: boolean;
+    configSchema: Record<string, unknown>;
+    correctAnswers: Record<string, unknown>;
+  }
+) {
+  return api<InteractiveElement>(
+    `/api/admin/curriculum/resources/${resourceId}/interactive-elements`,
+    { method: "POST", body, skipAuthRedirect: false }
+  );
+}
+
+export async function getInteractiveElement(id: string) {
+  return api<InteractiveElement>(
+    `/api/admin/curriculum/interactive-elements/${id}`,
+    { skipAuthRedirect: false }
+  );
+}
+
+export async function updateInteractiveElement(
+  id: string,
+  body: Partial<{
+    interactionType: InteractionType;
+    videoTimestampSeconds: number;
+    pauseOnTrigger: boolean;
+    configSchema: Record<string, unknown>;
+    correctAnswers: Record<string, unknown>;
+  }>
+) {
+  return api<InteractiveElement>(
+    `/api/admin/curriculum/interactive-elements/${id}`,
+    { method: "PATCH", body, skipAuthRedirect: false }
+  );
+}
+
+export async function deleteInteractiveElement(id: string) {
+  return api(`/api/admin/curriculum/interactive-elements/${id}`, {
+    method: "DELETE",
+    skipAuthRedirect: false,
+  });
 }
 
 /* ============================================================
