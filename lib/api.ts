@@ -391,6 +391,7 @@ export type EnrollStudentPayload = {
   firstName: string;
   lastName: string;
   email: string;
+  classId?: string;
   academicLevel?: string;
   password?: string;
 };
@@ -837,3 +838,17 @@ export async function listCurriculumResources(topicId: string) {
      .learningPlanId without casting.
    ============================================================ */
 
+export type CurriculumClass = {
+  id: string;
+  title: string;
+  term?: string | null;
+  isActive?: boolean;
+  subjectId?: string;
+};
+
+/** List all classes (standalone catalog). */
+export async function listAllClasses() {
+  return api<CurriculumClass[]>("/api/admin/curriculum/classes", {
+    skipAuthRedirect: false,
+  });
+}

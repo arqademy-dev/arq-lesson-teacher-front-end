@@ -1,5 +1,5 @@
 "use client";
-
+// admin/curriculum/subjects/[id]/page.tsx
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";

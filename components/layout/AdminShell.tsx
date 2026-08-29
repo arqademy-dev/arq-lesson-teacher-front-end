@@ -21,6 +21,7 @@ const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/admin/educators", label: "Educators", icon: Users },
   { href: "/admin/curriculum", label: "Curriculum", icon: BookOpen },
+  { href: "/admin/content-bank", label: "Content Bank", icon: BookOpen },
   { href: "/admin/payments", label: "Payments", icon: CreditCard },
 ];
 

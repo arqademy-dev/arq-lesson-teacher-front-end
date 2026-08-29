@@ -1,5 +1,5 @@
 "use client";
-
+// admin/curriculum/page.tsx
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AdminShell } from "@/components/layout/AdminShell";

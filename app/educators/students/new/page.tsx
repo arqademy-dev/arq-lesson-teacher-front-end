@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,16 +9,21 @@ import {
   enrollStudent,
   getEducatorMe,
   educatorLogout,
+  listAllClasses,
   ApiError,
+  type CurriculumClass,
 } from "@/lib/api";
 import { EducatorShell } from "@/components/layout/EducatorShell";
 import { ArrowLeft, Loader2, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const DEFAULT_PASSWORD = "225466";
+
 const schema = z.object({
   firstName: z.string().min(1, "Required"),
   lastName: z.string().min(1, "Required"),
   email: z.string().email("Valid email required"),
+  classId: z.string().min(1, "Select a class"),
   academicLevel: z.string().optional(),
   password: z
     .string()
@@ -41,29 +45,65 @@ type EnrollResult = {
 };
 
 export default function EnrollStudentPage() {
-  const router = useRouter();
   const [name, setName] = useState("Educator");
   const [arqId, setArqId] = useState<string | undefined>();
+  const [classes, setClasses] = useState<CurriculumClass[]>([]);
+  const [classesLoading, setClassesLoading] = useState(true);
   const [result, setResult] = useState<EnrollResult | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  useState(() => {
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      classId: "",
+      academicLevel: "",
+      password: DEFAULT_PASSWORD,
+    },
+  });
+
+  const selectedClassId = watch("classId");
+
+  // Load educator + classes
+  useEffect(() => {
     getEducatorMe()
       .then((me) => {
         setName(`${me.firstName} ${me.lastName}`.trim());
         setArqId(me.arqId);
       })
       .catch(() => null);
-  });
 
-  
+    listAllClasses()
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        // Prefer active classes; fall back to all
+        const active = list.filter((c) => c.isActive !== false);
+        setClasses(active.length > 0 ? active : list);
+      })
+      .catch(() => setClasses([]))
+      .finally(() => setClassesLoading(false));
+  }, []);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) });
+  // When class changes → academicLevel = class title
+  useEffect(() => {
+    if (!selectedClassId) {
+      setValue("academicLevel", "");
+      return;
+    }
+    const cls = classes.find((c) => c.id === selectedClassId);
+    if (cls?.title) {
+      setValue("academicLevel", cls.title, { shouldValidate: true });
+    }
+  }, [selectedClassId, classes, setValue]);
 
   async function onSubmit(values: FormValues) {
     setServerError(null);
@@ -73,7 +113,11 @@ export default function EnrollStudentPage() {
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
         email: values.email.trim(),
-        academicLevel: values.academicLevel?.trim() || undefined,
+        classId: values.classId,
+        academicLevel:
+          values.academicLevel?.trim() ||
+          classes.find((c) => c.id === values.classId)?.title ||
+          undefined,
         password: values.password?.trim() || undefined,
       })) as EnrollResult;
       setResult(res);
@@ -144,26 +188,54 @@ export default function EnrollStudentPage() {
               <input className={inputClass} {...register("lastName")} />
             </Field>
           </div>
+
           <Field label="Email" error={errors.email?.message}>
             <input type="email" className={inputClass} {...register("email")} />
           </Field>
-          <Field label="Academic level (optional)">
-            <input
+
+          {/* Class dropdown → drives academicLevel */}
+          <Field label="Class" error={errors.classId?.message}>
+            <select
               className={inputClass}
-              placeholder="e.g. SSS 1"
+              disabled={classesLoading}
+              {...register("classId")}
+            >
+              <option value="">
+                {classesLoading ? "Loading classes…" : "Select a class"}
+              </option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title}
+                  {c.term ? ` · ${c.term}` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          {/* Auto-filled from class name; still visible/editable if needed */}
+          <Field label="Academic level">
+            <input
+              className={cn(inputClass, "bg-[var(--surface-3)]")}
+              placeholder="Filled from class"
+              readOnly
               {...register("academicLevel")}
             />
+            <p className="mt-1 text-[11px] text-[var(--ink-4)] font-semibold">
+              Set automatically from the selected class name.
+            </p>
           </Field>
-          <Field
-            label="Password (optional)"
-            error={errors.password?.message}
-          >
+
+          <Field label="Password" error={errors.password?.message}>
             <input
-              type="password"
+              type="text"
               className={inputClass}
-              placeholder="Leave blank to auto-generate"
+              placeholder={DEFAULT_PASSWORD}
               {...register("password")}
             />
+            <p className="mt-1 text-[11px] text-[var(--ink-4)] font-semibold">
+              Default is {DEFAULT_PASSWORD}. Change if you want a different
+              password, or clear to let the server auto-generate.
+            </p>
           </Field>
 
           {serverError && (
@@ -174,7 +246,7 @@ export default function EnrollStudentPage() {
 
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || classesLoading}
             className="w-full h-11 rounded-[10px] text-[13px] font-heading font-semibold bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)] disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
@@ -223,7 +295,8 @@ export default function EnrollStudentPage() {
             </div>
           )}
           <p className="text-[12.5px] text-[var(--ink-3)]">
-            Student can log in, generate payment for a plan once you assign one.
+            Student can log in. Assign a learning plan next so they can start
+            sessions.
           </p>
           <div className="flex flex-wrap gap-2">
             {studentId && (
