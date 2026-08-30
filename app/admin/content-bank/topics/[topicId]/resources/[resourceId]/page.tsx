@@ -333,6 +333,7 @@ export default function AdminResourceDetailPage() {
       {elementModal && (
         <InteractiveElementEditor
           resourceId={resourceId}
+          resourceType={resource?.resourceType}
           element={elementModal.mode === "edit" ? elementModal.element : null}
           onClose={() => setElementModal(null)}
           onSaved={() => {

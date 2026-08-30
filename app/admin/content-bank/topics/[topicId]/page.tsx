@@ -33,6 +33,7 @@ const RESOURCE_TYPES: ResourceType[] = [
   "image",
   "interactive",
   "quiz",
+  "submission",
 ];
 
 const TYPE_ICON: Record<ResourceType, typeof FileText> = {
@@ -42,6 +43,7 @@ const TYPE_ICON: Record<ResourceType, typeof FileText> = {
   image: ImageIcon,
   interactive: MousePointerClick,
   quiz: FileQuestion,
+  submission: FileIcon,
 };
 
 export default function AdminTopicResourcesPage() {

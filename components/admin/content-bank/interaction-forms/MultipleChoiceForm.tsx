@@ -10,56 +10,24 @@ type Props = {
 };
 
 export function MultipleChoiceForm({ config, answers, onChange }: Props) {
-  function updateOption(id: string, text: string, imageUrl: string) {
+  function updateOption(index: number, value: string) {
+    const wasCorrect = config.options[index] === answers.answer && answers.answer !== "";
+    const options = config.options.map((o, i) => (i === index ? value : o));
     onChange(
-      {
-        ...config,
-        options: config.options.map((o) =>
-          o.id === id ? { ...o, text, imageUrl: imageUrl || undefined } : o
-        ),
-      },
-      answers
+      { ...config, options },
+      { answer: wasCorrect ? value : answers.answer }
     );
   }
 
   function addOption() {
-    onChange(
-      {
-        ...config,
-        options: [...config.options, { id: crypto.randomUUID(), text: "" }],
-      },
-      answers
-    );
+    onChange({ ...config, options: [...config.options, ""] }, answers);
   }
 
-  function removeOption(id: string) {
+  function removeOption(index: number) {
+    const removed = config.options[index];
     onChange(
-      { ...config, options: config.options.filter((o) => o.id !== id) },
-      { correctOptionIds: answers.correctOptionIds.filter((oid) => oid !== id) }
-    );
-  }
-
-  function toggleCorrect(id: string) {
-    const isCorrect = answers.correctOptionIds.includes(id);
-    if (config.allowMultiple) {
-      onChange(config, {
-        correctOptionIds: isCorrect
-          ? answers.correctOptionIds.filter((oid) => oid !== id)
-          : [...answers.correctOptionIds, id],
-      });
-    } else {
-      onChange(config, { correctOptionIds: isCorrect ? [] : [id] });
-    }
-  }
-
-  function setAllowMultiple(allowMultiple: boolean) {
-    // Switching to single-answer mode with 2+ correct options would be an
-    // inconsistent state, so trim down to the first one.
-    onChange(
-      { ...config, allowMultiple },
-      allowMultiple
-        ? answers
-        : { correctOptionIds: answers.correctOptionIds.slice(0, 1) }
+      { ...config, options: config.options.filter((_, i) => i !== index) },
+      { answer: answers.answer === removed ? "" : answers.answer }
     );
   }
 
@@ -73,67 +41,37 @@ export function MultipleChoiceForm({ config, answers, onChange }: Props) {
           value={config.question}
           onChange={(e) => onChange({ ...config, question: e.target.value }, answers)}
           rows={2}
+          placeholder="e.g. What does the digit 0 represent?"
           className="w-full px-3 py-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px]"
         />
       </div>
 
-      <div className="flex items-center gap-4">
-        <label className="flex items-center gap-2 text-[12.5px] text-[var(--ink-2)]">
-          <input
-            type="checkbox"
-            checked={config.allowMultiple}
-            onChange={(e) => setAllowMultiple(e.target.checked)}
-          />
-          Allow multiple correct answers
-        </label>
-        <label className="flex items-center gap-2 text-[12.5px] text-[var(--ink-2)]">
-          <input
-            type="checkbox"
-            checked={config.shuffleOptions ?? false}
-            onChange={(e) => onChange({ ...config, shuffleOptions: e.target.checked }, answers)}
-          />
-          Shuffle options for students
-        </label>
-      </div>
-
       <div>
         <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-1">
-          Options — tick the correct one{config.allowMultiple ? "(s)" : ""}
+          Options — tick the correct one
         </label>
         <div className="space-y-2">
-          {config.options.map((opt) => (
-            <div key={opt.id} className="flex items-start gap-2">
+          {config.options.map((opt, i) => (
+            <div key={i} className="flex items-center gap-2">
               <input
-                type={config.allowMultiple ? "checkbox" : "radio"}
+                type="radio"
                 name="mc-correct"
-                checked={answers.correctOptionIds.includes(opt.id)}
-                onChange={() => toggleCorrect(opt.id)}
-                className="mt-2.5"
+                checked={opt !== "" && opt === answers.answer}
+                onChange={() => onChange(config, { answer: opt })}
+                className="flex-none"
               />
-              <div className="flex-1 grid gap-1.5">
-                <input
-                  value={opt.text}
-                  onChange={(e) => updateOption(opt.id, e.target.value, opt.imageUrl ?? "")}
-                  placeholder="Option text"
-                  className="h-9 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px]"
-                />
-                <input
-                  value={opt.imageUrl ?? ""}
-                  onChange={(e) => updateOption(opt.id, opt.text, e.target.value)}
-                  placeholder="Image URL (optional)"
-                  className="h-8 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[11.5px]"
-                />
-              </div>
+              <input
+                value={opt}
+                onChange={(e) => updateOption(i, e.target.value)}
+                placeholder={`Option ${i + 1}`}
+                className="flex-1 h-9 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px]"
+              />
               <button
                 type="button"
-                onClick={() => removeOption(opt.id)}
+                onClick={() => removeOption(i)}
                 disabled={config.options.length <= 2}
-                className="p-1.5 text-[var(--danger)] disabled:opacity-30 mt-1"
-                title={
-                  config.options.length <= 2
-                    ? "At least 2 options required"
-                    : "Remove option"
-                }
+                className="p-1.5 text-[var(--danger)] disabled:opacity-30 flex-none"
+                title={config.options.length <= 2 ? "At least 2 options required" : "Remove option"}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>

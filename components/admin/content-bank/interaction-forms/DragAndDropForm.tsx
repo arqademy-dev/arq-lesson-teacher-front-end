@@ -1,7 +1,7 @@
 "use client";
 // components/admin/content-bank/interaction-forms/DragAndDropForm.tsx
+// Flat match-the-term exercise — no image, no canvas positions.
 import { Plus, Trash2 } from "lucide-react";
-import { RegionPicker } from "./RegionPicker";
 import type { DragAndDropAnswers, DragAndDropConfig } from "./types";
 
 type Props = {
@@ -11,68 +11,69 @@ type Props = {
 };
 
 export function DragAndDropForm({ config, answers, onChange }: Props) {
-  function updateItem(id: string, patch: Partial<{ label: string; imageUrl: string }>) {
+  function updateDraggable(id: string, text: string) {
     onChange(
-      {
-        ...config,
-        items: config.items.map((it) => (it.id === id ? { ...it, ...patch } : it)),
-      },
+      { ...config, draggables: config.draggables.map((d) => (d.id === id ? { ...d, text } : d)) },
       answers
     );
   }
 
-  function addItem() {
+  function addDraggable() {
     onChange(
-      { ...config, items: [...config.items, { id: crypto.randomUUID(), label: "" }] },
+      { ...config, draggables: [...config.draggables, { id: crypto.randomUUID(), text: "" }] },
       answers
     );
   }
 
-  function removeItem(id: string) {
-    const { [id]: _removed, ...rest } = answers.placements;
+  function removeDraggable(id: string) {
+    const { [id]: _removed, ...rest } = answers;
     onChange(
-      { ...config, items: config.items.filter((it) => it.id !== id) },
-      { placements: rest }
+      { ...config, draggables: config.draggables.filter((d) => d.id !== id) },
+      rest
     );
   }
 
-  function setPlacement(itemId: string, zoneId: string) {
-    onChange(config, { placements: { ...answers.placements, [itemId]: zoneId } });
+  function updateDropzone(id: string, label: string) {
+    onChange(
+      { ...config, dropzones: config.dropzones.map((z) => (z.id === id ? { ...z, label } : z)) },
+      answers
+    );
+  }
+
+  function addDropzone() {
+    onChange(
+      { ...config, dropzones: [...config.dropzones, { id: crypto.randomUUID(), label: "" }] },
+      answers
+    );
+  }
+
+  function removeDropzone(id: string) {
+    const nextAnswers = { ...answers };
+    for (const draggableId of Object.keys(nextAnswers)) {
+      if (nextAnswers[draggableId] === id) delete nextAnswers[draggableId];
+    }
+    onChange(
+      { ...config, dropzones: config.dropzones.filter((z) => z.id !== id) },
+      nextAnswers
+    );
+  }
+
+  function setPlacement(draggableId: string, dropzoneId: string) {
+    onChange(config, { ...answers, [draggableId]: dropzoneId });
   }
 
   return (
     <div className="space-y-4">
       <div>
         <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-1">
-          Background image URL
+          Instructions shown to the student
         </label>
-        <input
-          value={config.backgroundImageUrl}
-          onChange={(e) => onChange({ ...config, backgroundImageUrl: e.target.value }, answers)}
-          placeholder="https://…"
-          className="w-full h-9 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px]"
-        />
-      </div>
-
-      <label className="flex items-center gap-2 text-[12.5px] text-[var(--ink-2)]">
-        <input
-          type="checkbox"
-          checked={config.allowMultiplePerZone ?? false}
-          onChange={(e) => onChange({ ...config, allowMultiplePerZone: e.target.checked }, answers)}
-        />
-        A zone can accept more than one item
-      </label>
-
-      <div>
-        <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-1">
-          Drop zones
-        </label>
-        <RegionPicker
-          imageUrl={config.backgroundImageUrl}
-          regions={config.zones}
-          shapeMode="fixed"
-          fixedShape="rect"
-          onChange={(zones) => onChange({ ...config, zones }, answers)}
+        <textarea
+          value={config.instructions ?? ""}
+          onChange={(e) => onChange({ ...config, instructions: e.target.value }, answers)}
+          rows={2}
+          placeholder="e.g. Match each term to its correct definition."
+          className="w-full px-3 py-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px]"
         />
       </div>
 
@@ -81,24 +82,18 @@ export function DragAndDropForm({ config, answers, onChange }: Props) {
           Draggable items
         </label>
         <div className="space-y-2">
-          {config.items.map((it) => (
-            <div key={it.id} className="flex items-center gap-2">
+          {config.draggables.map((d) => (
+            <div key={d.id} className="flex items-center gap-2">
               <input
-                value={it.label}
-                onChange={(e) => updateItem(it.id, { label: e.target.value })}
-                placeholder="Item label"
-                className="flex-1 h-9 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px]"
-              />
-              <input
-                value={it.imageUrl ?? ""}
-                onChange={(e) => updateItem(it.id, { imageUrl: e.target.value })}
-                placeholder="Image URL (optional)"
+                value={d.text}
+                onChange={(e) => updateDraggable(d.id, e.target.value)}
+                placeholder="Item text (e.g. a term)"
                 className="flex-1 h-9 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px]"
               />
               <button
                 type="button"
-                onClick={() => removeItem(it.id)}
-                disabled={config.items.length <= 1}
+                onClick={() => removeDraggable(d.id)}
+                disabled={config.draggables.length <= 1}
                 className="p-1.5 text-[var(--danger)] disabled:opacity-30"
               >
                 <Trash2 className="w-4 h-4" />
@@ -108,7 +103,7 @@ export function DragAndDropForm({ config, answers, onChange }: Props) {
         </div>
         <button
           type="button"
-          onClick={addItem}
+          onClick={addDraggable}
           className="mt-2 inline-flex items-center gap-1 h-8 px-2.5 rounded-[6px] border border-[var(--line)] text-[11.5px] font-semibold text-[var(--ink-2)] hover:bg-[var(--surface-2)]"
         >
           <Plus className="w-3.5 h-3.5" />
@@ -116,9 +111,43 @@ export function DragAndDropForm({ config, answers, onChange }: Props) {
         </button>
       </div>
 
-      {config.zones.length === 0 ? (
+      <div>
+        <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-1">
+          Drop zones
+        </label>
+        <div className="space-y-2">
+          {config.dropzones.map((z) => (
+            <div key={z.id} className="flex items-center gap-2">
+              <input
+                value={z.label}
+                onChange={(e) => updateDropzone(z.id, e.target.value)}
+                placeholder="Zone label (e.g. a definition)"
+                className="flex-1 h-9 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px]"
+              />
+              <button
+                type="button"
+                onClick={() => removeDropzone(z.id)}
+                disabled={config.dropzones.length <= 1}
+                className="p-1.5 text-[var(--danger)] disabled:opacity-30"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addDropzone}
+          className="mt-2 inline-flex items-center gap-1 h-8 px-2.5 rounded-[6px] border border-[var(--line)] text-[11.5px] font-semibold text-[var(--ink-2)] hover:bg-[var(--surface-2)]"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add zone
+        </button>
+      </div>
+
+      {config.dropzones.length === 0 ? (
         <p className="text-[12px] text-[var(--ink-3)] italic">
-          Add at least one drop zone above before assigning correct placements.
+          Add at least one drop zone before assigning correct placements.
         </p>
       ) : (
         <div>
@@ -126,18 +155,18 @@ export function DragAndDropForm({ config, answers, onChange }: Props) {
             Correct zone per item
           </label>
           <div className="space-y-2">
-            {config.items.map((it) => (
-              <div key={it.id} className="flex items-center gap-2">
+            {config.draggables.map((d) => (
+              <div key={d.id} className="flex items-center gap-2">
                 <span className="flex-1 text-[12.5px] text-[var(--ink-2)] truncate">
-                  {it.label || "(untitled item)"}
+                  {d.text || "(untitled item)"}
                 </span>
                 <select
-                  value={answers.placements[it.id] ?? ""}
-                  onChange={(e) => setPlacement(it.id, e.target.value)}
+                  value={answers[d.id] ?? ""}
+                  onChange={(e) => setPlacement(d.id, e.target.value)}
                   className="h-8 px-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12px]"
                 >
                   <option value="">Select zone…</option>
-                  {config.zones.map((z) => (
+                  {config.dropzones.map((z) => (
                     <option key={z.id} value={z.id}>
                       {z.label || "(untitled zone)"}
                     </option>

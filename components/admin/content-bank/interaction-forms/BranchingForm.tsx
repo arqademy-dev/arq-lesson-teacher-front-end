@@ -1,7 +1,9 @@
 "use client";
 // components/admin/content-bank/interaction-forms/BranchingForm.tsx
+// A single decision point — a scenario, several choices, each routing to
+// a feedback message via its `next` key. Not a multi-step tree.
 import { Plus, Trash2 } from "lucide-react";
-import type { BranchingAnswers, BranchingConfig, BranchingStep } from "./types";
+import type { BranchingAnswers, BranchingConfig } from "./types";
 
 type Props = {
   config: BranchingConfig;
@@ -10,250 +12,137 @@ type Props = {
 };
 
 export function BranchingForm({ config, answers, onChange }: Props) {
-  function updateStep(id: string, patch: Partial<BranchingStep>) {
+  const usedKeys = Array.from(new Set(config.choices.map((c) => c.next).filter(Boolean)));
+
+  function updateChoice(id: string, patch: Partial<{ text: string; next: string }>) {
     onChange(
-      { ...config, steps: config.steps.map((s) => (s.id === id ? { ...s, ...patch } : s)) },
+      { ...config, choices: config.choices.map((c) => (c.id === id ? { ...c, ...patch } : c)) },
       answers
     );
   }
 
-  function addStep() {
-    const step: BranchingStep = {
-      id: crypto.randomUUID(),
-      prompt: "",
-      choices: [{ id: crypto.randomUUID(), text: "", nextStepId: null }],
-    };
-    onChange({ ...config, steps: [...config.steps, step] }, answers);
-  }
-
-  function removeStep(id: string) {
-    // Clear any choice that pointed at the removed step, and reset the
-    // start step if it was the one removed.
-    const steps = config.steps
-      .filter((s) => s.id !== id)
-      .map((s) => ({
-        ...s,
-        choices: s.choices.map((c) => (c.nextStepId === id ? { ...c, nextStepId: null } : c)),
-      }));
+  function addChoice() {
+    const next = `outcome_${config.choices.length + 1}`;
     onChange(
       {
         ...config,
-        steps,
-        startStepId: config.startStepId === id ? steps[0]?.id ?? "" : config.startStepId,
-      },
-      { idealPath: [] } // path is no longer trustworthy once the tree changes shape
-    );
-  }
-
-  function updateChoice(stepId: string, choiceId: string, patch: Partial<{ text: string; nextStepId: string | null }>) {
-    onChange(
-      {
-        ...config,
-        steps: config.steps.map((s) =>
-          s.id === stepId
-            ? { ...s, choices: s.choices.map((c) => (c.id === choiceId ? { ...c, ...patch } : c)) }
-            : s
-        ),
-      },
-      { idealPath: [] }
-    );
-  }
-
-  function addChoice(stepId: string) {
-    onChange(
-      {
-        ...config,
-        steps: config.steps.map((s) =>
-          s.id === stepId
-            ? { ...s, choices: [...s.choices, { id: crypto.randomUUID(), text: "", nextStepId: null }] }
-            : s
-        ),
+        choices: [...config.choices, { id: crypto.randomUUID(), text: "", next }],
+        feedback: { ...config.feedback, [next]: config.feedback[next] ?? "" },
       },
       answers
     );
   }
 
-  function removeChoice(stepId: string, choiceId: string) {
+  function removeChoice(id: string) {
+    const removed = config.choices.find((c) => c.id === id);
     onChange(
-      {
-        ...config,
-        steps: config.steps.map((s) =>
-          s.id === stepId ? { ...s, choices: s.choices.filter((c) => c.id !== choiceId) } : s
-        ),
-      },
-      { idealPath: answers.idealPath.filter((cid) => cid !== choiceId) }
+      { ...config, choices: config.choices.filter((c) => c.id !== id) },
+      { answer: answers.answer === id ? "" : answers.answer }
     );
   }
 
-  // --- Ideal path builder ---
-  // Walk the path so far: start at startStepId, follow each chosen ideal
-  // choice's nextStepId, and show a "pick the ideal choice" selector at
-  // each step reached, until a choice with nextStepId === null ends it.
-  function stepById(id: string) {
-    return config.steps.find((s) => s.id === id);
-  }
-
-  const walk: { step: BranchingStep; chosenChoiceId: string | null }[] = [];
-  let cursor: string | undefined = config.startStepId;
-  let guard = 0;
-  while (cursor && guard < config.steps.length + 1) {
-    guard++;
-    const step = stepById(cursor);
-    if (!step) break;
-    const chosenChoiceId = answers.idealPath[walk.length] ?? null;
-    walk.push({ step, chosenChoiceId });
-    if (!chosenChoiceId) break; // path not decided past this point yet
-    const chosen = step.choices.find((c) => c.id === chosenChoiceId);
-    if (!chosen || chosen.nextStepId === null) break; // scenario ends here
-    cursor = chosen.nextStepId;
-  }
-
-  function setIdealChoiceAt(depth: number, choiceId: string) {
-    onChange(config, { idealPath: [...answers.idealPath.slice(0, depth), choiceId] });
+  function setFeedback(key: string, message: string) {
+    onChange({ ...config, feedback: { ...config.feedback, [key]: message } }, answers);
   }
 
   return (
     <div className="space-y-4">
       <div>
         <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-1">
-          Start step
+          Scenario
         </label>
-        <select
-          value={config.startStepId}
-          onChange={(e) => onChange({ ...config, startStepId: e.target.value }, { idealPath: [] })}
-          className="w-full h-9 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px]"
-        >
-          {config.steps.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.prompt || "(untitled step)"}
-            </option>
-          ))}
-        </select>
+        <textarea
+          value={config.scenario}
+          onChange={(e) => onChange({ ...config, scenario: e.target.value }, answers)}
+          rows={2}
+          placeholder="e.g. Which best describes photosynthesis?"
+          className="w-full px-3 py-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px]"
+        />
       </div>
 
-      <div className="space-y-3">
-        {config.steps.map((step) => (
-          <div
-            key={step.id}
-            className="rounded-[8px] border border-[var(--line)] bg-[var(--surface-2)] p-3 space-y-2"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-[var(--ink-3)]">
-                Step
-              </span>
-              <button
-                type="button"
-                onClick={() => removeStep(step.id)}
-                disabled={config.steps.length <= 1}
-                className="p-1 text-[var(--danger)] disabled:opacity-30"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <textarea
-              value={step.prompt}
-              onChange={(e) => updateStep(step.id, { prompt: e.target.value })}
-              placeholder="Scenario / prompt text for this step"
-              rows={2}
-              className="w-full px-3 py-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface)] text-[12.5px]"
-            />
-            <input
-              value={step.imageUrl ?? ""}
-              onChange={(e) => updateStep(step.id, { imageUrl: e.target.value })}
-              placeholder="Image URL (optional)"
-              className="w-full h-8 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface)] text-[11.5px]"
-            />
-
-            <div className="space-y-1.5 pt-1">
-              {step.choices.map((choice) => (
-                <div key={choice.id} className="flex items-center gap-2">
-                  <input
-                    value={choice.text}
-                    onChange={(e) => updateChoice(step.id, choice.id, { text: e.target.value })}
-                    placeholder="Choice text"
-                    className="flex-1 h-8 px-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface)] text-[12px]"
-                  />
-                  <select
-                    value={choice.nextStepId ?? ""}
-                    onChange={(e) =>
-                      updateChoice(step.id, choice.id, {
-                        nextStepId: e.target.value || null,
-                      })
-                    }
-                    className="h-8 px-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface)] text-[12px]"
-                  >
-                    <option value="">Ends scenario</option>
-                    {config.steps
-                      .filter((s) => s.id !== step.id)
-                      .map((s) => (
-                        <option key={s.id} value={s.id}>
-                          → {s.prompt || "(untitled step)"}
-                        </option>
-                      ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => removeChoice(step.id, choice.id)}
-                    disabled={step.choices.length <= 1}
-                    className="p-1 text-[var(--danger)] disabled:opacity-30"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => addChoice(step.id)}
-                className="inline-flex items-center gap-1 h-7 px-2 rounded-[6px] border border-[var(--line)] text-[11px] font-semibold text-[var(--ink-2)] hover:bg-[var(--surface)]"
-              >
-                <Plus className="w-3 h-3" />
-                Add choice
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <button
-        type="button"
-        onClick={addStep}
-        className="inline-flex items-center gap-1 h-8 px-2.5 rounded-[6px] border border-[var(--line)] text-[11.5px] font-semibold text-[var(--ink-2)] hover:bg-[var(--surface-2)]"
-      >
-        <Plus className="w-3.5 h-3.5" />
-        Add step
-      </button>
-
-      <div className="pt-2 border-t border-[var(--line-soft)]">
-        <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-2">
-          Ideal path — pick the recommended choice at each step
+      <div>
+        <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-1">
+          Choices — tick the correct one
         </label>
         <div className="space-y-2">
-          {walk.map((w, depth) => (
-            <div key={w.step.id} className="flex items-center gap-2">
-              <span className="text-[11.5px] text-[var(--ink-3)] w-14 flex-none">
-                Step {depth + 1}
-              </span>
-              <select
-                value={w.chosenChoiceId ?? ""}
-                onChange={(e) => setIdealChoiceAt(depth, e.target.value)}
-                className="flex-1 h-8 px-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12px]"
-              >
-                <option value="">Pick the ideal choice…</option>
-                {w.step.choices.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.text || "(untitled choice)"}
-                  </option>
-                ))}
-              </select>
+          {config.choices.map((choice) => (
+            <div
+              key={choice.id}
+              className="rounded-[8px] border border-[var(--line)] bg-[var(--surface-2)] p-2.5 space-y-1.5"
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="branch-correct"
+                  checked={answers.answer === choice.id}
+                  onChange={() => onChange(config, { answer: choice.id })}
+                  className="flex-none"
+                />
+                <input
+                  value={choice.text}
+                  onChange={(e) => updateChoice(choice.id, { text: e.target.value })}
+                  placeholder="Choice text"
+                  className="flex-1 h-8 px-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface)] text-[12px]"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeChoice(choice.id)}
+                  disabled={config.choices.length <= 2}
+                  className="p-1 text-[var(--danger)] disabled:opacity-30 flex-none"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 pl-6">
+                <label className="text-[10.5px] text-[var(--ink-3)] flex-none">
+                  Outcome key
+                </label>
+                <input
+                  value={choice.next}
+                  onChange={(e) => updateChoice(choice.id, { next: e.target.value })}
+                  placeholder="e.g. correct_feedback"
+                  className="flex-1 h-7 px-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface)] text-[11.5px] font-mono"
+                />
+              </div>
             </div>
           ))}
-          {walk.length > 0 && walk[walk.length - 1].chosenChoiceId && (
-            <p className="text-[11.5px] text-[var(--ink-3)] italic">
-              Path complete — this choice ends the scenario.
-            </p>
-          )}
         </div>
+        <button
+          type="button"
+          onClick={addChoice}
+          className="mt-2 inline-flex items-center gap-1 h-8 px-2.5 rounded-[6px] border border-[var(--line)] text-[11.5px] font-semibold text-[var(--ink-2)] hover:bg-[var(--surface-2)]"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add choice
+        </button>
+      </div>
+
+      <div>
+        <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-1">
+          Feedback messages
+        </label>
+        {usedKeys.length === 0 ? (
+          <p className="text-[12px] text-[var(--ink-3)] italic">
+            Set an outcome key on a choice above to add its feedback message.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {usedKeys.map((key) => (
+              <div key={key}>
+                <p className="text-[10.5px] font-bold text-[var(--ink-3)] mb-1 font-mono">
+                  {key}
+                </p>
+                <textarea
+                  value={config.feedback[key] ?? ""}
+                  onChange={(e) => setFeedback(key, e.target.value)}
+                  rows={1}
+                  placeholder="Message shown to the student for this outcome"
+                  className="w-full px-3 py-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12px]"
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

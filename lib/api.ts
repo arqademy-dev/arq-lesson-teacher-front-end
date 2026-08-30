@@ -786,7 +786,9 @@ export type ResourceType =
   | "article"
   | "image"
   | "interactive"
-  | "quiz";
+  | "quiz"
+  | "submission"; // used for file_upload interactive elements
+
 
 export type ContentBlockHeading = { type: "heading"; level: 1 | 2 | 3; text: string };
 export type ContentBlockParagraph = { type: "paragraph"; text: string };
@@ -886,6 +888,7 @@ export async function deleteResource(id: string) {
   });
 }
 
+
 export type InteractionType =
   | "drag_and_drop"
   | "fill_blank"
@@ -893,7 +896,8 @@ export type InteractionType =
   | "branching"
   | "interactive_video"
   | "image_sequencing"
-  | "multiple_choice";
+  | "multiple_choice"
+  | "file_upload"; 
 
 export type InteractiveElement = {
   id: string;

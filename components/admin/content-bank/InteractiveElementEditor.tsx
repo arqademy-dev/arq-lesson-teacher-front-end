@@ -1,16 +1,21 @@
 "use client";
 // components/admin/content-bank/InteractiveElementEditor.tsx
 //
-// All 7 documented interactionTypes have typed forms, plus file_upload
-// (a.k.a. "submission") which is NOT in the OpenAPI doc's enum — confirm
-// with backend that the API accepts "file_upload" as a value before
-// relying on this in production.
+// All 8 interactionTypes (the 7 documented + confirmed-real file_upload)
+// now have typed forms matching the actual seeded backend shapes — no
+// raw-JSON fallback needed anymore.
+//
+// `resourceType` is optional context from the parent resource, used only
+// to pick a sensible default interaction type for brand-new elements:
+// video resources default to interactive_video, submission resources
+// default to file_upload.
 import { useState } from "react";
 import {
   createInteractiveElement,
   updateInteractiveElement,
   type InteractionType,
   type InteractiveElement,
+  type ResourceType,
 } from "@/lib/api";
 import { X, Loader2 } from "lucide-react";
 import { MultipleChoiceForm } from "./interaction-forms/MultipleChoiceForm";
@@ -20,6 +25,7 @@ import { HotspotForm } from "./interaction-forms/HotspotForm";
 import { BranchingForm } from "./interaction-forms/BranchingForm";
 import { InteractiveVideoForm } from "./interaction-forms/InteractiveVideoForm";
 import { FileUploadForm } from "./interaction-forms/FileUploadForm";
+import { ImageSequencingForm } from "./interaction-forms/ImageSequencingForm";
 import {
   defaultBranchingAnswers,
   defaultBranchingConfig,
@@ -29,12 +35,14 @@ import {
   defaultFileUploadConfig,
   defaultFillBlankAnswers,
   defaultFillBlankConfig,
-  defaultHotspotAnswers,
   defaultHotspotConfig,
+  defaultImageSequencingConfig,
   defaultInteractiveVideoAnswers,
   defaultInteractiveVideoConfig,
   defaultMultipleChoiceAnswers,
   defaultMultipleChoiceConfig,
+  deriveHotspotAnswers,
+  extractBlankKeys,
   type BranchingAnswers,
   type BranchingConfig,
   type DragAndDropAnswers,
@@ -43,17 +51,15 @@ import {
   type FileUploadConfig,
   type FillBlankAnswers,
   type FillBlankConfig,
-  type HotspotAnswers,
   type HotspotConfig,
+  type ImageSequencingConfig,
   type InteractiveVideoAnswers,
   type InteractiveVideoConfig,
   type MultipleChoiceAnswers,
   type MultipleChoiceConfig,
 } from "./interaction-forms/types";
 
-// NOTE: "file_upload" appended here is not in the documented OpenAPI enum.
-// Confirm with backend before relying on it — see file header.
-const INTERACTION_TYPES: (InteractionType | "file_upload")[] = [
+const ALL_TYPES: (InteractionType | "file_upload")[] = [
   "multiple_choice",
   "fill_blank",
   "drag_and_drop",
@@ -64,40 +70,36 @@ const INTERACTION_TYPES: (InteractionType | "file_upload")[] = [
   "file_upload",
 ];
 
-const TYPED_FORMS: (InteractionType | "file_upload")[] = [
-  "multiple_choice",
-  "fill_blank",
-  "drag_and_drop",
-  "hotspot",
-  "branching",
-  "interactive_video",
-  "file_upload",
-];
-
 type Props = {
   resourceId: string;
+  /** Context from the parent resource — used only to pick a sensible
+   *  default interaction type for brand-new elements. */
+  resourceType?: ResourceType;
   element?: InteractiveElement | null; // present = edit mode
   onClose: () => void;
   onSaved: () => void;
 };
 
+function defaultTypeFor(resourceType?: ResourceType): InteractionType | "file_upload" {
+  if (resourceType === "video") return "interactive_video";
+  if ((resourceType as string) === "submission") return "file_upload";
+  return "multiple_choice";
+}
+
 export function InteractiveElementEditor({
   resourceId,
+  resourceType,
   element,
   onClose,
   onSaved,
 }: Props) {
   const [interactionType, setInteractionType] = useState<InteractionType | "file_upload">(
-    element?.interactionType ?? "multiple_choice"
+    element?.interactionType ?? defaultTypeFor(resourceType)
   );
   const [videoTimestampSeconds, setVideoTimestampSeconds] = useState<string>(
-    element?.videoTimestampSeconds != null
-      ? String(element.videoTimestampSeconds)
-      : ""
+    element?.videoTimestampSeconds != null ? String(element.videoTimestampSeconds) : ""
   );
-  const [pauseOnTrigger, setPauseOnTrigger] = useState(
-    element?.pauseOnTrigger ?? false
-  );
+  const [pauseOnTrigger, setPauseOnTrigger] = useState(element?.pauseOnTrigger ?? false);
 
   const [mcConfig, setMcConfig] = useState<MultipleChoiceConfig>(
     element?.interactionType === "multiple_choice"
@@ -134,11 +136,6 @@ export function InteractiveElementEditor({
       ? (element.configSchema as unknown as HotspotConfig)
       : defaultHotspotConfig()
   );
-  const [hsAnswers, setHsAnswers] = useState<HotspotAnswers>(
-    element?.interactionType === "hotspot"
-      ? (element.correctAnswers as unknown as HotspotAnswers)
-      : defaultHotspotAnswers()
-  );
   const [brConfig, setBrConfig] = useState<BranchingConfig>(
     element?.interactionType === "branching"
       ? (element.configSchema as unknown as BranchingConfig)
@@ -159,6 +156,11 @@ export function InteractiveElementEditor({
       ? (element.correctAnswers as unknown as InteractiveVideoAnswers)
       : defaultInteractiveVideoAnswers()
   );
+  const [isConfig, setIsConfig] = useState<ImageSequencingConfig>(
+    element?.interactionType === "image_sequencing"
+      ? (element.configSchema as unknown as ImageSequencingConfig)
+      : defaultImageSequencingConfig()
+  );
   const [fuConfig, setFuConfig] = useState<FileUploadConfig>(
     (element?.interactionType as string) === "file_upload"
       ? (element!.configSchema as unknown as FileUploadConfig)
@@ -168,15 +170,6 @@ export function InteractiveElementEditor({
     (element?.interactionType as string) === "file_upload"
       ? (element!.correctAnswers as unknown as FileUploadAnswers)
       : defaultFileUploadAnswers()
-  );
-
-  // Raw-JSON fallback state — only meaningful for image_sequencing now.
-  const startsUntyped = !TYPED_FORMS.includes(element?.interactionType ?? "multiple_choice");
-  const [configSchemaText, setConfigSchemaText] = useState(
-    startsUntyped ? JSON.stringify(element?.configSchema ?? {}, null, 2) : "{}"
-  );
-  const [correctAnswersText, setCorrectAnswersText] = useState(
-    startsUntyped ? JSON.stringify(element?.correctAnswers ?? {}, null, 2) : "{}"
   );
 
   const [saving, setSaving] = useState(false);
@@ -196,19 +189,17 @@ export function InteractiveElementEditor({
       setDdAnswers(defaultDragAndDropAnswers());
     } else if (next === "hotspot") {
       setHsConfig(defaultHotspotConfig());
-      setHsAnswers(defaultHotspotAnswers());
     } else if (next === "branching") {
       setBrConfig(defaultBranchingConfig());
       setBrAnswers(defaultBranchingAnswers());
     } else if (next === "interactive_video") {
       setIvConfig(defaultInteractiveVideoConfig());
       setIvAnswers(defaultInteractiveVideoAnswers());
+    } else if (next === "image_sequencing") {
+      setIsConfig(defaultImageSequencingConfig());
     } else if (next === "file_upload") {
       setFuConfig(defaultFileUploadConfig());
       setFuAnswers(defaultFileUploadAnswers());
-    } else {
-      setConfigSchemaText("{}");
-      setCorrectAnswersText("{}");
     }
   }
 
@@ -220,57 +211,61 @@ export function InteractiveElementEditor({
 
     if (interactionType === "multiple_choice") {
       if (!mcConfig.question.trim()) return setError("Question is required");
-      if (mcConfig.options.some((o) => !o.text.trim()))
-        return setError("All options need text");
-      if (mcAnswers.correctOptionIds.length === 0)
-        return setError("Mark at least one option as correct");
+      if (mcConfig.options.some((o) => !o.trim())) return setError("All options need text");
+      if (!mcAnswers.answer || !mcConfig.options.includes(mcAnswers.answer))
+        return setError("Mark the correct option");
       configSchema = mcConfig as unknown as Record<string, unknown>;
       correctAnswers = mcAnswers as unknown as Record<string, unknown>;
     } else if (interactionType === "fill_blank") {
-      if (!fbConfig.template.trim()) return setError("Template is required");
-      if (fbConfig.blanks.length === 0)
-        return setError("Add at least one {{id}} blank to the template");
-      const missing = fbConfig.blanks.filter(
-        (b) => (fbAnswers.answers[b.id] ?? []).length === 0
-      );
-      if (missing.length > 0)
-        return setError(`Accepted answers missing for: ${missing.map((b) => b.id).join(", ")}`);
+      const keys = extractBlankKeys(fbConfig.prompt_text);
+      if (!fbConfig.prompt_text.trim()) return setError("Template is required");
+      if (keys.length === 0) return setError("Add at least one [id] blank to the template");
+      for (const key of keys) {
+        const options = fbConfig.dropdown_options[key] ?? [];
+        if (options.length < 2) return setError(`Add at least 2 dropdown choices for [${key}]`);
+        if (!fbAnswers[key]) return setError(`Mark the correct choice for [${key}]`);
+      }
       configSchema = fbConfig as unknown as Record<string, unknown>;
       correctAnswers = fbAnswers as unknown as Record<string, unknown>;
     } else if (interactionType === "drag_and_drop") {
-      if (!ddConfig.backgroundImageUrl.trim())
-        return setError("Background image URL is required");
-      if (ddConfig.zones.length === 0) return setError("Add at least one drop zone");
-      if (ddConfig.items.some((it) => !it.label.trim()))
-        return setError("All items need a label");
-      const unplaced = ddConfig.items.filter((it) => !ddAnswers.placements[it.id]);
+      if (ddConfig.draggables.length === 0) return setError("Add at least one draggable item");
+      if (ddConfig.dropzones.length === 0) return setError("Add at least one drop zone");
+      if (ddConfig.draggables.some((d) => !d.text.trim())) return setError("All items need text");
+      if (ddConfig.dropzones.some((z) => !z.label.trim())) return setError("All zones need a label");
+      const unplaced = ddConfig.draggables.filter((d) => !ddAnswers[d.id]);
       if (unplaced.length > 0)
-        return setError(`Assign a correct zone for: ${unplaced.map((i) => i.label || "(untitled)").join(", ")}`);
+        return setError(`Assign a correct zone for: ${unplaced.map((d) => d.text || "(untitled)").join(", ")}`);
       configSchema = ddConfig as unknown as Record<string, unknown>;
       correctAnswers = ddAnswers as unknown as Record<string, unknown>;
     } else if (interactionType === "hotspot") {
-      if (!hsConfig.imageUrl.trim()) return setError("Image URL is required");
+      if (!hsConfig.backgroundImageUrl.trim()) return setError("Background image URL is required");
       if (hsConfig.hotspots.length === 0) return setError("Add at least one hotspot");
-      if (hsAnswers.correctHotspotIds.length === 0)
-        return setError("Mark at least one hotspot as correct");
+      if (hsConfig.hotspots.some((h) => !h.label.trim())) return setError("Every hotspot needs a label");
       configSchema = hsConfig as unknown as Record<string, unknown>;
-      correctAnswers = hsAnswers as unknown as Record<string, unknown>;
+      correctAnswers = deriveHotspotAnswers(hsConfig) as unknown as Record<string, unknown>;
     } else if (interactionType === "branching") {
-      if (brConfig.steps.some((s) => !s.prompt.trim()))
-        return setError("Every step needs a prompt");
-      if (brConfig.steps.some((s) => s.choices.some((c) => !c.text.trim())))
-        return setError("Every choice needs text");
-      if (brAnswers.idealPath.length === 0)
-        return setError("Build the ideal path before saving");
+      if (!brConfig.scenario.trim()) return setError("Scenario is required");
+      if (brConfig.choices.some((c) => !c.text.trim())) return setError("Every choice needs text");
+      if (brConfig.choices.some((c) => !c.next.trim())) return setError("Every choice needs an outcome key");
+      const usedKeys = Array.from(new Set(brConfig.choices.map((c) => c.next)));
+      const missingFeedback = usedKeys.filter((k) => !brConfig.feedback[k]?.trim());
+      if (missingFeedback.length > 0)
+        return setError(`Add feedback text for: ${missingFeedback.join(", ")}`);
+      if (!brAnswers.answer) return setError("Mark the correct choice");
       configSchema = brConfig as unknown as Record<string, unknown>;
       correctAnswers = brAnswers as unknown as Record<string, unknown>;
     } else if (interactionType === "interactive_video") {
-      if (!ivConfig.prompt.trim()) return setError("Prompt is required");
-      if (ivConfig.choices.some((c) => !c.text.trim()))
-        return setError("All choices need text");
-      if (!ivAnswers.correctChoiceId) return setError("Mark the correct choice");
+      if (!ivConfig.prompt_text.trim()) return setError("Prompt is required");
+      if (ivConfig.options.some((o) => !o.trim())) return setError("All options need text");
+      if (!ivAnswers.answer || !ivConfig.options.includes(ivAnswers.answer))
+        return setError("Mark the correct option");
       configSchema = ivConfig as unknown as Record<string, unknown>;
       correctAnswers = ivAnswers as unknown as Record<string, unknown>;
+    } else if (interactionType === "image_sequencing") {
+      if (isConfig.items.length < 2) return setError("Add at least 2 items");
+      if (isConfig.items.some((it) => !it.text.trim())) return setError("All items need text");
+      configSchema = isConfig as unknown as Record<string, unknown>;
+      correctAnswers = { order: isConfig.items.map((it) => it.id) };
     } else if (interactionType === "file_upload") {
       if (!fuConfig.allowFile && !fuConfig.allowText)
         return setError("Enable at least one of file upload or text note");
@@ -279,16 +274,7 @@ export function InteractiveElementEditor({
       configSchema = fuConfig as unknown as Record<string, unknown>;
       correctAnswers = fuAnswers as unknown as Record<string, unknown>;
     } else {
-      try {
-        configSchema = JSON.parse(configSchemaText);
-      } catch {
-        return setError("configSchema is not valid JSON");
-      }
-      try {
-        correctAnswers = JSON.parse(correctAnswersText);
-      } catch {
-        return setError("correctAnswers is not valid JSON");
-      }
+      return setError("Unsupported interaction type");
     }
 
     setSaving(true);
@@ -299,9 +285,7 @@ export function InteractiveElementEditor({
         correctAnswers,
         ...(interactionType === "interactive_video"
           ? {
-              videoTimestampSeconds: videoTimestampSeconds
-                ? Number(videoTimestampSeconds)
-                : undefined,
+              videoTimestampSeconds: videoTimestampSeconds ? Number(videoTimestampSeconds) : undefined,
               pauseOnTrigger,
             }
           : {}),
@@ -341,14 +325,22 @@ export function InteractiveElementEditor({
               onChange={(e) => onTypeChange(e.target.value as InteractionType | "file_upload")}
               className="w-full h-9 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px]"
             >
-              {INTERACTION_TYPES.map((t) => (
+              {ALL_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {t}
-                  {!TYPED_FORMS.includes(t) ? " (raw JSON — builder coming soon)" : ""}
-                  {t === "file_upload" ? " — confirm backend accepts this value" : ""}
                 </option>
               ))}
             </select>
+            {!element && resourceType === "video" && interactionType === "interactive_video" && (
+              <p className="text-[11px] text-[var(--ink-3)] mt-1">
+                Defaulted to Interactive video since this resource is a video.
+              </p>
+            )}
+            {!element && (resourceType as string) === "submission" && interactionType === "file_upload" && (
+              <p className="text-[11px] text-[var(--ink-3)] mt-1">
+                Defaulted to File upload since this resource is a submission.
+              </p>
+            )}
           </div>
 
           {interactionType === "multiple_choice" && (
@@ -385,14 +377,7 @@ export function InteractiveElementEditor({
           )}
 
           {interactionType === "hotspot" && (
-            <HotspotForm
-              config={hsConfig}
-              answers={hsAnswers}
-              onChange={(c, a) => {
-                setHsConfig(c);
-                setHsAnswers(a);
-              }}
-            />
+            <HotspotForm config={hsConfig} onChange={setHsConfig} />
           )}
 
           {interactionType === "branching" && (
@@ -423,6 +408,10 @@ export function InteractiveElementEditor({
             />
           )}
 
+          {interactionType === "image_sequencing" && (
+            <ImageSequencingForm config={isConfig} onChange={setIsConfig} />
+          )}
+
           {interactionType === "file_upload" && (
             <FileUploadForm
               config={fuConfig}
@@ -433,39 +422,10 @@ export function InteractiveElementEditor({
               }}
             />
           )}
-
-          {!TYPED_FORMS.includes(interactionType) && (
-            <>
-              <div>
-                <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-1">
-                  configSchema (JSON — shown to students)
-                </label>
-                <textarea
-                  value={configSchemaText}
-                  onChange={(e) => setConfigSchemaText(e.target.value)}
-                  rows={6}
-                  className="w-full px-3 py-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12px] font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-1">
-                  correctAnswers (JSON — admin-only, never sent to students)
-                </label>
-                <textarea
-                  value={correctAnswersText}
-                  onChange={(e) => setCorrectAnswersText(e.target.value)}
-                  rows={4}
-                  className="w-full px-3 py-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12px] font-mono"
-                />
-              </div>
-            </>
-          )}
         </div>
 
         {error && (
-          <p className="px-5 text-[12px] font-semibold text-[var(--danger)]">
-            {error}
-          </p>
+          <p className="px-5 text-[12px] font-semibold text-[var(--danger)]">{error}</p>
         )}
 
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-[var(--line-soft)]">

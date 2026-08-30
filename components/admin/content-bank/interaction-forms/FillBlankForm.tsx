@@ -1,6 +1,6 @@
 "use client";
 // components/admin/content-bank/interaction-forms/FillBlankForm.tsx
-import { extractBlankIds, type FillBlankAnswers, type FillBlankConfig } from "./types";
+import { extractBlankKeys, type FillBlankAnswers, type FillBlankConfig } from "./types";
 
 type Props = {
   config: FillBlankConfig;
@@ -9,97 +9,93 @@ type Props = {
 };
 
 export function FillBlankForm({ config, answers, onChange }: Props) {
-  const detectedIds = extractBlankIds(config.template);
+  const keys = extractBlankKeys(config.prompt_text);
 
-  function setTemplate(template: string) {
-    const ids = extractBlankIds(template);
-    // Keep blanks/answers in sync with whatever {{id}} tokens are
-    // currently in the template — add new ones, drop removed ones.
-    const blanks = ids.map(
-      (id) => config.blanks.find((b) => b.id === id) ?? { id }
-    );
-    const nextAnswers: Record<string, string[]> = {};
-    for (const id of ids) {
-      nextAnswers[id] = answers.answers[id] ?? [];
+  function setTemplate(prompt_text: string) {
+    const nextKeys = extractBlankKeys(prompt_text);
+    const dropdown_options: Record<string, string[]> = {};
+    const nextAnswers: FillBlankAnswers = {};
+    for (const key of nextKeys) {
+      dropdown_options[key] = config.dropdown_options[key] ?? [];
+      nextAnswers[key] = answers[key] ?? "";
     }
-    onChange({ ...config, template, blanks }, { answers: nextAnswers });
+    onChange({ ...config, prompt_text, dropdown_options }, nextAnswers);
   }
 
-  function setBlankPlaceholder(id: string, placeholder: string) {
-    onChange(
-      {
-        ...config,
-        blanks: config.blanks.map((b) =>
-          b.id === id ? { ...b, placeholder: placeholder || undefined } : b
-        ),
-      },
-      answers
-    );
-  }
-
-  function setAcceptedAnswers(id: string, raw: string) {
-    const list = raw
+  function setOptionsForKey(key: string, raw: string) {
+    const options = raw
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
-    onChange(config, { answers: { ...answers.answers, [id]: list } });
+    const dropdown_options = { ...config.dropdown_options, [key]: options };
+    const currentAnswer = answers[key];
+    const answer = currentAnswer && options.includes(currentAnswer) ? currentAnswer : "";
+    onChange({ ...config, dropdown_options }, { ...answers, [key]: answer });
+  }
+
+  function setCorrectForKey(key: string, value: string) {
+    onChange(config, { ...answers, [key]: value });
   }
 
   return (
     <div className="space-y-3">
       <div>
         <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-1">
-          Template — wrap each blank in {"{{id}}"}, e.g.{" "}
-          <span className="font-mono">
-            The capital of Nigeria is {"{{c1}}"}.
-          </span>
+          Template — wrap each blank in [id], e.g.{" "}
+          <span className="font-mono">Water boils at [temp] degrees.</span>
         </label>
         <textarea
-          value={config.template}
+          value={config.prompt_text}
           onChange={(e) => setTemplate(e.target.value)}
           rows={3}
           className="w-full px-3 py-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface-2)] text-[12.5px] font-mono"
         />
       </div>
 
-      <label className="flex items-center gap-2 text-[12.5px] text-[var(--ink-2)]">
-        <input
-          type="checkbox"
-          checked={config.caseSensitive ?? false}
-          onChange={(e) => onChange({ ...config, caseSensitive: e.target.checked }, answers)}
-        />
-        Case-sensitive grading
-      </label>
-
       <div>
         <label className="block text-[11px] font-bold text-[var(--ink-3)] mb-1">
-          Blanks {detectedIds.length === 0 && "— add a {{id}} token above"}
+          Blanks {keys.length === 0 && "— add a [id] token above"}
         </label>
-        {detectedIds.length > 0 && (
+        {keys.length > 0 && (
           <div className="space-y-3">
-            {detectedIds.map((id) => {
-              const blank = config.blanks.find((b) => b.id === id);
+            {keys.map((key) => {
+              const options = config.dropdown_options[key] ?? [];
               return (
                 <div
-                  key={id}
-                  className="rounded-[8px] border border-[var(--line)] bg-[var(--surface-2)] p-3"
+                  key={key}
+                  className="rounded-[8px] border border-[var(--line)] bg-[var(--surface-2)] p-3 space-y-2"
                 >
-                  <p className="text-[11.5px] font-bold text-[var(--ink)] mb-2 font-mono">
-                    {"{{" + id + "}}"}
+                  <p className="text-[11.5px] font-bold text-[var(--ink)] font-mono">
+                    [{key}]
                   </p>
-                  <div className="grid gap-2">
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-[var(--ink-3)] mb-1">
+                      Dropdown choices shown to the student (comma-separated)
+                    </label>
                     <input
-                      value={blank?.placeholder ?? ""}
-                      onChange={(e) => setBlankPlaceholder(id, e.target.value)}
-                      placeholder="Placeholder shown in the input (optional)"
-                      className="h-8 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface)] text-[12px]"
+                      value={options.join(", ")}
+                      onChange={(e) => setOptionsForKey(key, e.target.value)}
+                      placeholder="e.g. 100, 90, 50"
+                      className="w-full h-8 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface)] text-[12px]"
                     />
-                    <input
-                      value={(answers.answers[id] ?? []).join(", ")}
-                      onChange={(e) => setAcceptedAnswers(id, e.target.value)}
-                      placeholder="Accepted answers, comma-separated (e.g. Abuja, abuja)"
-                      className="h-8 px-3 rounded-[6px] border border-[var(--line)] bg-[var(--surface)] text-[12px]"
-                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-[var(--ink-3)] mb-1">
+                      Correct choice
+                    </label>
+                    <select
+                      value={answers[key] ?? ""}
+                      onChange={(e) => setCorrectForKey(key, e.target.value)}
+                      disabled={options.length === 0}
+                      className="w-full h-8 px-2 rounded-[6px] border border-[var(--line)] bg-[var(--surface)] text-[12px] disabled:opacity-50"
+                    >
+                      <option value="">Select…</option>
+                      {options.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               );

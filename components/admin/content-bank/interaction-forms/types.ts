@@ -1,268 +1,253 @@
 // components/admin/content-bank/interaction-forms/types.ts
+//
+// These shapes are reverse-engineered from real seed scripts that
+// successfully wrote to the production backend — treat the field
+// NAMES and STRUCTURE here as ground truth, more reliable than the
+// OpenAPI doc's open-ended configSchema/correctAnswers description.
 
-export type MultipleChoiceOption = {
-  id: string;
-  text: string;
-  imageUrl?: string;
-};
+/* ============================================================
+   multiple_choice
+   Single-answer only. Options are plain strings, matched by exact
+   text — there are no per-option ids.
+   ============================================================ */
 
 export type MultipleChoiceConfig = {
   question: string;
-  options: MultipleChoiceOption[];
-  allowMultiple: boolean;
-  shuffleOptions?: boolean;
+  options: string[];
 };
 
 export type MultipleChoiceAnswers = {
-  correctOptionIds: string[];
+  answer: string; // must exactly match one entry in options
 };
 
 export function defaultMultipleChoiceConfig(): MultipleChoiceConfig {
-  return {
-    question: "",
-    options: [
-      { id: crypto.randomUUID(), text: "" },
-      { id: crypto.randomUUID(), text: "" },
-    ],
-    allowMultiple: false,
-    shuffleOptions: false,
-  };
+  return { question: "", options: ["", ""] };
 }
 
 export function defaultMultipleChoiceAnswers(): MultipleChoiceAnswers {
-  return { correctOptionIds: [] };
-}
-
-export type FillBlankBlank = {
-  id: string;
-  placeholder?: string;
-};
-
-export type FillBlankConfig = {
-  template: string;
-  blanks: FillBlankBlank[];
-  caseSensitive?: boolean;
-};
-
-export type FillBlankAnswers = {
-  answers: Record<string, string[]>;
-};
-
-export function defaultFillBlankConfig(): FillBlankConfig {
-  return { template: "", blanks: [], caseSensitive: false };
-}
-
-export function defaultFillBlankAnswers(): FillBlankAnswers {
-  return { answers: {} };
-}
-
-/** Extracts {{id}} tokens from a template, in order, deduped. */
-export function extractBlankIds(template: string): string[] {
-  const matches = template.match(/\{\{(.*?)\}\}/g) ?? [];
-  const ids = matches.map((m) => m.slice(2, -2).trim()).filter(Boolean);
-  return Array.from(new Set(ids));
+  return { answer: "" };
 }
 
 /* ============================================================
-   Shared: positioned regions on an image
-   Used by both drag_and_drop (zones) and hotspot (hotspots).
-   x/y are the CENTER of the region, all values are percentages
-   (0-100) of the image's rendered box — so placement stays
-   correct at any render size.
+   fill_blank
+   Template uses [blankKey] tokens (square brackets, not curly).
+   Each blank is answered via a dropdown of admin-supplied choices,
+   not free text.
    ============================================================ */
 
-export type RegionShape = "rect" | "circle";
-
-export type Region = {
-  id: string;
-  label: string;
-  shape: RegionShape;
-  x: number;
-  y: number;
-  width?: number; // rect only, % of image width
-  height?: number; // rect only, % of image height
-  radius?: number; // circle only, % of image width
+export type FillBlankConfig = {
+  prompt_text: string;
+  dropdown_options: Record<string, string[]>; // blankKey -> choices shown to student
 };
 
-export function defaultRegion(shape: RegionShape): Region {
-  return shape === "circle"
-    ? { id: crypto.randomUUID(), label: "", shape, x: 50, y: 50, radius: 8 }
-    : { id: crypto.randomUUID(), label: "", shape, x: 50, y: 50, width: 20, height: 15 };
+export type FillBlankAnswers = Record<string, string>; // blankKey -> correct choice
+
+export function defaultFillBlankConfig(): FillBlankConfig {
+  return { prompt_text: "", dropdown_options: {} };
+}
+
+export function defaultFillBlankAnswers(): FillBlankAnswers {
+  return {};
+}
+
+/** Extracts [blankKey] tokens from prompt_text, in order, deduped. */
+export function extractBlankKeys(promptText: string): string[] {
+  const matches = promptText.match(/\[(.*?)\]/g) ?? [];
+  const keys = matches.map((m) => m.slice(1, -1).trim()).filter(Boolean);
+  return Array.from(new Set(keys));
 }
 
 /* ============================================================
    drag_and_drop
+   A flat match-the-term exercise — no image, no canvas positions.
    ============================================================ */
 
-export type DragAndDropItem = {
-  id: string;
-  label: string;
-  imageUrl?: string;
-};
-
-export type DragAndDropZone = Region; // shape is always "rect" for zones
+export type DragAndDropDraggable = { id: string; text: string };
+export type DragAndDropDropzone = { id: string; label: string };
 
 export type DragAndDropConfig = {
-  backgroundImageUrl: string;
-  items: DragAndDropItem[];
-  zones: DragAndDropZone[];
-  allowMultiplePerZone?: boolean;
+  instructions?: string;
+  draggables: DragAndDropDraggable[];
+  dropzones: DragAndDropDropzone[];
 };
 
-export type DragAndDropAnswers = {
-  placements: Record<string, string>; // itemId -> zoneId
-};
+export type DragAndDropAnswers = Record<string, string>; // draggableId -> dropzoneId
 
 export function defaultDragAndDropConfig(): DragAndDropConfig {
   return {
-    backgroundImageUrl: "",
-    items: [
+    instructions: "",
+    draggables: [
+      { id: crypto.randomUUID(), text: "" },
+      { id: crypto.randomUUID(), text: "" },
+    ],
+    dropzones: [
       { id: crypto.randomUUID(), label: "" },
       { id: crypto.randomUUID(), label: "" },
     ],
-    zones: [defaultRegion("rect")],
-    allowMultiplePerZone: false,
   };
 }
 
 export function defaultDragAndDropAnswers(): DragAndDropAnswers {
-  return { placements: {} };
+  return {};
 }
 
 /* ============================================================
    hotspot
+   Labeled regions on an image — a "label the diagram" exercise, not
+   a "guess which one" quiz. Position (x_coords/y_coords) is a
+   percentage string, top-left anchored; size (width/height) is a
+   fixed pixel string. There is no correctness-picking step:
+   correctAnswers is always derived, mapping each hotspot's id to
+   its own label.
    ============================================================ */
 
+export type Hotspot = {
+  id: string;
+  label: string;
+  x_coords: string; // e.g. "20%"
+  y_coords: string; // e.g. "30%"
+  width: string; // e.g. "150px"
+  height: string; // e.g. "60px"
+};
+
 export type HotspotConfig = {
-  imageUrl: string;
-  hotspots: Region[];
-  allowMultiple?: boolean;
-  maxAttempts?: number;
+  backgroundImageUrl: string;
+  hotspots: Hotspot[];
 };
 
-export type HotspotAnswers = {
-  correctHotspotIds: string[];
-};
+export type HotspotAnswers = Record<string, string>; // hotspotId -> label
 
-export function defaultHotspotConfig(): HotspotConfig {
+export function defaultHotspot(): Hotspot {
   return {
-    imageUrl: "",
-    hotspots: [defaultRegion("rect")],
-    allowMultiple: false,
-    maxAttempts: 3,
+    id: crypto.randomUUID(),
+    label: "",
+    x_coords: "20%",
+    y_coords: "30%",
+    width: "150px",
+    height: "60px",
   };
 }
 
-export function defaultHotspotAnswers(): HotspotAnswers {
-  return { correctHotspotIds: [] };
+export function defaultHotspotConfig(): HotspotConfig {
+  return { backgroundImageUrl: "", hotspots: [defaultHotspot()] };
+}
+
+/** correctAnswers is never edited directly — always derived from labels. */
+export function deriveHotspotAnswers(config: HotspotConfig): HotspotAnswers {
+  const out: HotspotAnswers = {};
+  for (const h of config.hotspots) out[h.id] = h.label;
+  return out;
 }
 
 /* ============================================================
    branching
+   A single decision point — one scenario, several choices, each
+   choice routes to a feedback message via its `next` key. Not a
+   multi-step tree.
    ============================================================ */
 
-export type BranchingChoice = {
-  id: string;
-  text: string;
-  nextStepId: string | null; // null = this choice ends the scenario
-};
-
-export type BranchingStep = {
-  id: string;
-  prompt: string;
-  imageUrl?: string;
-  choices: BranchingChoice[];
-};
+export type BranchingChoice = { id: string; text: string; next: string }; // next = a key into feedback
 
 export type BranchingConfig = {
-  steps: BranchingStep[];
-  startStepId: string;
+  scenario: string;
+  choices: BranchingChoice[];
+  feedback: Record<string, string>; // key -> message shown for that outcome
 };
 
 export type BranchingAnswers = {
-  idealPath: string[]; // ordered choice ids, start step's choice first
+  answer: string; // id of the correct choice
 };
 
 export function defaultBranchingConfig(): BranchingConfig {
-  const stepId = crypto.randomUUID();
   return {
-    steps: [
-      {
-        id: stepId,
-        prompt: "",
-        choices: [
-          { id: crypto.randomUUID(), text: "", nextStepId: null },
-          { id: crypto.randomUUID(), text: "", nextStepId: null },
-        ],
-      },
+    scenario: "",
+    choices: [
+      { id: crypto.randomUUID(), text: "", next: "correct_feedback" },
+      { id: crypto.randomUUID(), text: "", next: "incorrect_feedback" },
     ],
-    startStepId: stepId,
+    feedback: {
+      correct_feedback: "Correct!",
+      incorrect_feedback: "Not quite — think again.",
+    },
   };
 }
 
 export function defaultBranchingAnswers(): BranchingAnswers {
-  return { idealPath: [] };
+  return { answer: "" };
+}
+
+/* ============================================================
+   image_sequencing
+   Despite the name, items only need id+text — an image is optional.
+   The order they're arranged in IS the correct order; students see
+   a shuffled copy and must reorder it.
+   ============================================================ */
+
+export type SequenceItem = { id: string; text: string; imageUrl?: string };
+
+export type ImageSequencingConfig = {
+  instructions?: string;
+  items: SequenceItem[]; // arranged in the correct order
+};
+
+export type ImageSequencingAnswers = {
+  order: string[]; // item ids, derived from items[] order at save time
+};
+
+export function defaultImageSequencingConfig(): ImageSequencingConfig {
+  return {
+    instructions: "",
+    items: [
+      { id: crypto.randomUUID(), text: "" },
+      { id: crypto.randomUUID(), text: "" },
+      { id: crypto.randomUUID(), text: "" },
+    ],
+  };
+}
+
+export function defaultImageSequencingAnswers(): ImageSequencingAnswers {
+  return { order: [] };
 }
 
 /* ============================================================
    interactive_video
-   Timing (videoTimestampSeconds / pauseOnTrigger) lives at the
-   top level of InteractiveElement — this form still surfaces them
-   for editing (see InteractiveVideoForm), but they save onto the
-   element itself, not into configSchema.
+   Same single-answer pattern as multiple_choice. Timing
+   (videoTimestampSeconds / pauseOnTrigger) lives at the top level
+   of InteractiveElement, not here.
    ============================================================ */
 
-export type InteractiveVideoChoice = {
-  id: string;
-  text: string;
-};
-
 export type InteractiveVideoConfig = {
-  prompt: string;
-  choices: InteractiveVideoChoice[];
-  allowSkip?: boolean;
+  prompt_text: string;
+  options: string[];
 };
 
 export type InteractiveVideoAnswers = {
-  correctChoiceId: string;
+  answer: string; // must exactly match one entry in options
 };
 
 export function defaultInteractiveVideoConfig(): InteractiveVideoConfig {
-  return {
-    prompt: "",
-    choices: [
-      { id: crypto.randomUUID(), text: "" },
-      { id: crypto.randomUUID(), text: "" },
-    ],
-    allowSkip: false,
-  };
+  return { prompt_text: "", options: ["", ""] };
 }
 
 export function defaultInteractiveVideoAnswers(): InteractiveVideoAnswers {
-  return { correctChoiceId: "" };
+  return { answer: "" };
 }
 
 /* ============================================================
-   file_upload (a.k.a. "submission")
-   NOT in the OpenAPI doc's interactionType enum — confirm with
-   backend that "file_upload" is an accepted value before relying
-   on this in production. Shape matches the existing student-facing
-   FileUploadConfig used by the submission UI.
-   There's no auto-gradable answer here — a human reviews the
-   submission, so correctAnswers just carries a manual-review flag
-   and optional rubric notes for the reviewer.
+   file_upload (resourceType "submission")
+   Confirmed real — seeded directly against the backend. Reviewed
+   manually by an educator, so there's no auto-gradable answer.
    ============================================================ */
 
 export type FileUploadConfig = {
   instructions?: string;
   allowFile?: boolean; // default true
   allowText?: boolean; // default true
-  maxFiles?: number; // default 1, only relevant when allowFile is true
+  maxFiles?: number; // default 1
 };
 
 export type FileUploadAnswers = {
-  requiresManualReview: boolean;
-  gradingNotes?: string; // admin-only rubric/notes, never sent to students
+  gradingNotes?: string; // admin-only — not in the original seed, but harmless to add
 };
 
 export function defaultFileUploadConfig(): FileUploadConfig {
@@ -270,5 +255,5 @@ export function defaultFileUploadConfig(): FileUploadConfig {
 }
 
 export function defaultFileUploadAnswers(): FileUploadAnswers {
-  return { requiresManualReview: true, gradingNotes: "" };
+  return {};
 }
