@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Comfortaa } from "next/font/google";
 import "./globals.css";
+import { Toaster } from 'sonner';
 
 // 1. Initialize Comfortaa and define its CSS variable name
 const comfortaa = Comfortaa({
@@ -37,6 +38,7 @@ export default function RootLayout({
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col">
         {children}
+        <Toaster richColors closeButton position="top-right" />
       </body>
     </html>
   );

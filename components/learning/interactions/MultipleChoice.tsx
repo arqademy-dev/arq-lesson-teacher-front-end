@@ -12,8 +12,19 @@ type Props = {
 
 export function MultipleChoice({ config, disabled, onReady }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
-  const question = config.question || config.prompt || "Choose the best answer";
-  const options = config.options || [];
+  const question =
+    config.question ||
+    config.prompt ||
+    (config as { prompt_text?: string }).prompt_text ||
+    "Choose the best answer";
+  // Defensive: options should be string[], but tolerate legacy/malformed
+  // data (e.g. {id, text} objects from an earlier schema version) instead
+  // of crashing the whole page — one bad record shouldn't break a session.
+  const options = (config.options || []).map((opt: unknown) =>
+    typeof opt === "string"
+      ? opt
+      : (opt as { text?: string })?.text ?? String(opt)
+  );
 
   function pick(opt: string) {
     if (disabled) return;
