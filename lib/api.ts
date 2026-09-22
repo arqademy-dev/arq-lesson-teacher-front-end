@@ -1067,6 +1067,53 @@ export type ListProgrammesQuery = {
   offset?: number;
 };
 
+/* ============================================================
+   ADMIN — Curriculum: Topics (typed helpers)
+   ============================================================ */
+
+/* ============================================================
+   Topic — summaryFormat
+   ============================================================ */
+
+export type SummaryFormatSection = {
+  header: string;
+  body: string;
+};
+
+export type SummaryFormat = SummaryFormatSection[];
+
+export type Topic = {
+  id: string;
+  subjectId: string | null;
+  classId: string | null;
+  title: string;
+  description: string | null;
+  sortOrder: number | null;
+  expectedDurationDays: number;
+  summaryFormat?: SummaryFormat | null;
+  subjectTitle?: string | null;
+};
+
+export type CreateTopicPayload = {
+  subjectId?: string;          // now optional on backend
+  classId?: string;            // now optional
+  title: string;
+  description?: string;
+  sortOrder?: number;          // still send a default if backend requires it
+  expectedDurationDays?: number;
+  summaryFormat?: SummaryFormat;
+};
+
+export type UpdateTopicPayload = {
+  subjectId?: string | null;
+  classId?: string | null;
+  title?: string;
+  description?: string;
+  sortOrder?: number;
+  expectedDurationDays?: number;
+  summaryFormat?: SummaryFormat | null;
+};
+
 function programmesQuery(q: ListProgrammesQuery = {}): string {
   const params = new URLSearchParams();
   if (q.status) params.set("status", q.status);
@@ -1142,4 +1189,111 @@ export async function getPublishedProgramme(id: string) {
   return api<PublishedProgramme>(`/api/educators/programmes/${id}`, {
     skipAuthRedirect: false,
   });
+}
+
+/* ============================================================
+   ADMIN — Programme Topics
+   ============================================================ */
+
+export type ProgrammeTopic = {
+  topicId: string;
+  sequenceOrder: number;
+  title: string;
+  description: string | null;
+  expectedDurationDays: number;
+  subjectId: string | null;
+  subjectTitle: string | null;
+};
+
+export type AvailableTopic = {
+  id: string;
+  title: string;
+  description: string | null;
+  expectedDurationDays: number;
+  subjectId: string | null;
+  subjectTitle: string | null;
+};
+
+/** List topics already attached to a programme (ordered) */
+export async function listProgrammeTopics(programmeId: string) {
+  return api<ProgrammeTopic[]>(
+    `/api/admin/programmes/${programmeId}/topics`,
+    { skipAuthRedirect: false }
+  );
+}
+
+/** Topics in the pool that are NOT yet in this programme */
+export async function listAvailableProgrammeTopics(
+  programmeId: string,
+  subjectId?: string
+) {
+  const qs = subjectId ? `?subjectId=${encodeURIComponent(subjectId)}` : "";
+  return api<AvailableTopic[]>(
+    `/api/admin/programmes/${programmeId}/topics/available${qs}`,
+    { skipAuthRedirect: false }
+  );
+}
+
+/** Attach an existing topic to the end of the programme sequence */
+export async function addExistingTopicToProgramme(
+  programmeId: string,
+  topicId: string
+) {
+  return api<ProgrammeTopic[]>(
+    `/api/admin/programmes/${programmeId}/topics`,
+    {
+      method: "POST",
+      body: { topicId },
+      skipAuthRedirect: false,
+    }
+  );
+}
+
+/** Create a brand-new topic and attach it */
+export async function createAndAttachTopicToProgramme(
+  programmeId: string,
+  body: {
+    subjectId: string;
+    title: string;
+    description?: string;
+    expectedDurationDays?: number;
+  }
+) {
+  return api<ProgrammeTopic[]>(
+    `/api/admin/programmes/${programmeId}/topics`,
+    {
+      method: "POST",
+      body,
+      skipAuthRedirect: false,
+    }
+  );
+}
+
+/** Reorder topics — topicIds must be exactly the current set, each once */
+export async function reorderProgrammeTopics(
+  programmeId: string,
+  topicIds: string[]
+) {
+  return api<ProgrammeTopic[]>(
+    `/api/admin/programmes/${programmeId}/topics/order`,
+    {
+      method: "PUT",
+      body: { topicIds },
+      skipAuthRedirect: false,
+    }
+  );
+}
+
+/** Detach a topic from the programme (topic stays in the pool) */
+export async function removeTopicFromProgramme(
+  programmeId: string,
+  topicId: string
+) {
+  return api<ProgrammeTopic[]>(
+    `/api/admin/programmes/${programmeId}/topics/${topicId}`,
+    {
+      method: "DELETE",
+      skipAuthRedirect: false,
+    }
+  );
 }
