@@ -1027,3 +1027,119 @@ export async function listAllClasses() {
     skipAuthRedirect: false,
   });
 }
+
+
+/* ============================================================
+   ADMIN — Programmes
+   ============================================================ */
+
+export type ProgrammeStatus = "draft" | "published" | "locked";
+
+export type Programme = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  status: ProgrammeStatus;
+  createdAt: string;
+  updatedAt: string;
+  studentCount: number;
+  topicCount: number;
+};
+
+export type CreateProgrammePayload = {
+  title: string;
+  subtitle?: string;
+  description?: string;
+};
+
+export type UpdateProgrammePayload = {
+  title?: string;
+  subtitle?: string | null;
+  description?: string | null;
+  status?: ProgrammeStatus;
+};
+
+export type ListProgrammesQuery = {
+  status?: ProgrammeStatus;
+  search?: string;
+  limit?: number;
+  offset?: number;
+};
+
+function programmesQuery(q: ListProgrammesQuery = {}): string {
+  const params = new URLSearchParams();
+  if (q.status) params.set("status", q.status);
+  if (q.search) params.set("search", q.search);
+  if (q.limit != null) params.set("limit", String(q.limit));
+  if (q.offset != null) params.set("offset", String(q.offset));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+/** Admin: create a new programme (always starts as draft) */
+export async function createProgramme(payload: CreateProgrammePayload) {
+  return api<Programme>("/api/admin/programmes", {
+    method: "POST",
+    body: payload,
+    skipAuthRedirect: false,
+  });
+}
+
+/** Admin: list programmes (optional filters) */
+export async function listProgrammes(query: ListProgrammesQuery = {}) {
+  return api<Programme[]>(`/api/admin/programmes${programmesQuery(query)}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+/** Admin: get one programme by id */
+export async function getProgramme(id: string) {
+  return api<Programme>(`/api/admin/programmes/${id}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+/** Admin: update a programme */
+export async function updateProgramme(id: string, body: UpdateProgrammePayload) {
+  return api<Programme>(`/api/admin/programmes/${id}`, {
+    method: "PATCH",
+    body,
+    skipAuthRedirect: false,
+  });
+}
+
+/** Admin: delete a programme (only if no students and no topics) */
+export async function deleteProgramme(id: string) {
+  return api(`/api/admin/programmes/${id}`, {
+    method: "DELETE",
+    skipAuthRedirect: false,
+  });
+}
+
+/* ============================================================
+   EDUCATOR — Programmes (read-only, published only)
+   ============================================================ */
+
+export type PublishedProgramme = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  topicCount: number;
+};
+
+/** Educator: list published programmes (for enrol form dropdown etc.) */
+export async function listPublishedProgrammes(search?: string) {
+  const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+  return api<PublishedProgramme[]>(`/api/educators/programmes${qs}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+/** Educator: get one published programme */
+export async function getPublishedProgramme(id: string) {
+  return api<PublishedProgramme>(`/api/educators/programmes/${id}`, {
+    skipAuthRedirect: false,
+  });
+}
