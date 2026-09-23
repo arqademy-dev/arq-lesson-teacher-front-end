@@ -709,68 +709,114 @@ export async function deleteClass(id: string) {
 /* ============================================================
    ADMIN — Curriculum: Topics
    ============================================================ */
-   export type TopicFilters = { subjectId?: string; classId?: string };
+   
+export type SummaryFormatSection = {
+  header: string;
+  body: string;
+};
 
+export type SummaryFormat = SummaryFormatSection[];
 
-function topicsQuery(filters: TopicFilters): string {
+export type Topic = {
+  id: string;
+  subjectId: string | null;
+  classId: string | null;
+  title: string;
+  description: string | null;
+  sortOrder: number | null;
+  expectedDurationDays: number;
+  summaryFormat?: SummaryFormat | null;
+  subjectTitle?: string | null;
+};
+
+export type CreateTopicPayload = {
+  subjectId?: string;          // now optional on backend
+  classId?: string;            // now optional
+  title: string;
+  description?: string;
+  sortOrder?: number;          // still send a default if backend requires it
+  expectedDurationDays?: number;
+  summaryFormat?: SummaryFormat;
+};
+
+export type UpdateTopicPayload = {
+  subjectId?: string | null;
+  classId?: string | null;
+  title?: string;
+  description?: string;
+  sortOrder?: number;
+  expectedDurationDays?: number;
+  summaryFormat?: SummaryFormat | null;
+};
+
+export type TopicFilters = {
+  subjectId?: string;
+  classId?: string;
+};
+
+function topicsQuery(filters: TopicFilters = {}): string {
   const params = new URLSearchParams();
   if (filters.subjectId) params.set("subjectId", filters.subjectId);
   if (filters.classId) params.set("classId", filters.classId);
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }
- 
+
 export async function listTopics(filters: TopicFilters = {}) {
-  return api(`/api/admin/curriculum/topics${topicsQuery(filters)}`, {
+  return api<Topic[]>(`/api/admin/curriculum/topics${topicsQuery(filters)}`, {
     skipAuthRedirect: false,
   });
 }
- 
+
 export async function createTopic(body: {
-  subjectId: string;
-  classId: string;
+  subjectId?: string;
+  classId?: string;
   title: string;
   description?: string;
-  sortOrder: number;
-  expectedDurationDays: number;
+  sortOrder?: number;
+  expectedDurationDays?: number;
+  summaryFormat?: SummaryFormat;
 }) {
-  return api("/api/admin/curriculum/topics", {
+  return api<Topic>("/api/admin/curriculum/topics", {
     method: "POST",
     body,
     skipAuthRedirect: false,
   });
 }
- 
+
 export async function getTopic(id: string) {
-  return api(`/api/admin/curriculum/topics/${id}`, {
+  return api<Topic>(`/api/admin/curriculum/topics/${id}`, {
     skipAuthRedirect: false,
   });
 }
- 
+
 export async function updateTopic(
   id: string,
   body: {
-    subjectId?: string;
-    classId?: string;
+    subjectId?: string | null;
+    classId?: string | null;
     title?: string;
     description?: string;
     sortOrder?: number;
     expectedDurationDays?: number;
+    summaryFormat?: SummaryFormat | null;
   }
 ) {
-  return api(`/api/admin/curriculum/topics/${id}`, {
+  return api<Topic>(`/api/admin/curriculum/topics/${id}`, {
     method: "PATCH",
     body,
     skipAuthRedirect: false,
   });
 }
- 
+
 export async function deleteTopic(id: string) {
   return api(`/api/admin/curriculum/topics/${id}`, {
     method: "DELETE",
     skipAuthRedirect: false,
   });
 }
+
+
 
 /* ============================================================
    ADMIN — Curriculum: Resources & Interactive Elements
@@ -1067,52 +1113,10 @@ export type ListProgrammesQuery = {
   offset?: number;
 };
 
-/* ============================================================
-   ADMIN — Curriculum: Topics (typed helpers)
-   ============================================================ */
 
 /* ============================================================
    Topic — summaryFormat
    ============================================================ */
-
-export type SummaryFormatSection = {
-  header: string;
-  body: string;
-};
-
-export type SummaryFormat = SummaryFormatSection[];
-
-export type Topic = {
-  id: string;
-  subjectId: string | null;
-  classId: string | null;
-  title: string;
-  description: string | null;
-  sortOrder: number | null;
-  expectedDurationDays: number;
-  summaryFormat?: SummaryFormat | null;
-  subjectTitle?: string | null;
-};
-
-export type CreateTopicPayload = {
-  subjectId?: string;          // now optional on backend
-  classId?: string;            // now optional
-  title: string;
-  description?: string;
-  sortOrder?: number;          // still send a default if backend requires it
-  expectedDurationDays?: number;
-  summaryFormat?: SummaryFormat;
-};
-
-export type UpdateTopicPayload = {
-  subjectId?: string | null;
-  classId?: string | null;
-  title?: string;
-  description?: string;
-  sortOrder?: number;
-  expectedDurationDays?: number;
-  summaryFormat?: SummaryFormat | null;
-};
 
 function programmesQuery(q: ListProgrammesQuery = {}): string {
   const params = new URLSearchParams();
