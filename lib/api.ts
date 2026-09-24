@@ -1301,3 +1301,66 @@ export async function removeTopicFromProgramme(
     }
   );
 }
+
+/* ============================================================
+   ADMIN — Programme learning plan (per student)
+   ============================================================ */
+
+export type CreateProgrammePlanPayload = {
+  programmeId: string;
+  weeks: number;
+  quizDay: "friday" | "saturday";
+  quizSize: number;
+  startDate: string; // YYYY-MM-DD — must be a Monday
+  requireCorrectAnswersToProgress?: boolean;
+};
+
+export type ProgrammeLearningPlan = {
+  id: string;
+  studentId: string;
+  programmeId?: string | null;
+  weeks?: number;
+  quizDay?: string;
+  quizSize?: number;
+  startDate: string;
+  endDate?: string | null;
+  status: string;
+  sessionsPerWeek?: number;
+  preferredDays?: string[];
+  requireCorrectAnswersToProgress?: boolean;
+  createdAt?: string;
+};
+
+export type CreateProgrammePlanResult = {
+  plan: ProgrammeLearningPlan;
+  paymentId: string;
+  amountNaira: number;
+};
+
+export async function createStudentProgrammePlan(
+  studentId: string,
+  body: CreateProgrammePlanPayload
+) {
+  return api<CreateProgrammePlanResult>(
+    `/api/admin/students/${studentId}/learning-plan`,
+    { method: "POST", body, skipAuthRedirect: false }
+  );
+}
+
+export type WeeklyQuizSummary = {
+  id: string;
+  weekNumber: number;
+  scheduledDate: string;
+  status: string;
+  requestedSize: number;
+  score: number | null;
+  submittedAt: string | null;
+  totalQuestions: number;
+};
+
+export async function listAdminWeeklyQuizzes(learningPlanId: string) {
+  return api<WeeklyQuizSummary[]>(
+    `/api/admin/learning-plans/${learningPlanId}/weekly-quizzes`,
+    { skipAuthRedirect: false }
+  );
+}

@@ -22,7 +22,10 @@ export default function StudentPlanPage() {
           ← Back to Students
         </Link>
 
+        
         <PlanBuilder studentId={id} />
+
+
       </div>
     </AdminShell>
   );
