@@ -1364,3 +1364,147 @@ export async function listAdminWeeklyQuizzes(learningPlanId: string) {
     { skipAuthRedirect: false }
   );
 }
+
+
+/* ============================================================
+   ADMIN — Students (enrolment)
+   ============================================================ */
+
+export type AdminStudentGuardian = {
+  id?: string;
+  fullName: string;
+  phone?: string | null;
+  email?: string | null;
+  relationship?: string | null;
+  isPrimary?: boolean;
+};
+
+export type AdminStudent = {
+  id: string;
+  userId: string;
+  educatorId: string | null;
+  classId: string | null;
+  programId: string | null;
+  programmeTitle?: string | null;
+  enrollmentDate: string;
+  academicLevel?: string | null;
+  phone?: string | null;
+  firstName: string;
+  lastName: string;
+  email: string;
+  arqId: string;
+  active: boolean;
+  guardians?: AdminStudentGuardian[];
+};
+
+export type AdminEnrollStudentPayload = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  classId?: string;
+  programId?: string;
+  academicLevel?: string;
+  phone?: string;
+  password?: string;
+  educatorId?: string;
+  guardian?: {
+    fullName: string;
+    phone?: string;
+    email?: string;
+    relationship?: string;
+  };
+};
+
+export type AdminEnrollStudentResult = {
+  message: string;
+  student: {
+    id: string;
+    educatorId: string | null;
+    programId: string | null;
+    classId: string | null;
+    academicLevel?: string | null;
+    enrollmentDate: string;
+    guardian?: AdminStudentGuardian | null;
+  };
+  credentials: {
+    email: string;
+    arqId: string;
+    temporaryPassword: string | null;
+  };
+};
+
+export type ListAdminStudentsQuery = {
+  programId?: string;
+  educatorId?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+};
+
+function adminStudentsQuery(q: ListAdminStudentsQuery = {}): string {
+  const params = new URLSearchParams();
+  if (q.programId) params.set("programId", q.programId);
+  if (q.educatorId) params.set("educatorId", q.educatorId);
+  if (q.search) params.set("search", q.search);
+  if (q.limit != null) params.set("limit", String(q.limit));
+  if (q.offset != null) params.set("offset", String(q.offset));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export async function listAdminStudents(query: ListAdminStudentsQuery = {}) {
+  return api<AdminStudent[]>(
+    `/api/admin/students${adminStudentsQuery(query)}`,
+    { skipAuthRedirect: false }
+  );
+}
+
+export async function getAdminStudent(id: string) {
+  return api<AdminStudent>(`/api/admin/students/${id}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+export async function enrollAdminStudent(body: AdminEnrollStudentPayload) {
+  return api<AdminEnrollStudentResult>("/api/admin/students", {
+    method: "POST",
+    body,
+    skipAuthRedirect: false,
+  });
+}
+
+export async function updateAdminStudent(
+  id: string,
+  body: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    academicLevel?: string | null;
+    phone?: string | null;
+    classId?: string | null;
+    programId?: string | null;
+    educatorId?: string | null;
+    active?: boolean;
+    guardian?: {
+      fullName: string;
+      phone?: string;
+      email?: string;
+      relationship?: string;
+    };
+  }
+) {
+  return api<AdminStudent>(`/api/admin/students/${id}`, {
+    method: "PATCH",
+    body,
+    skipAuthRedirect: false,
+  });
+}
+
+/** Soft-delete: deactivates the user */
+export async function deactivateAdminStudent(id: string) {
+  return api<{ message: string; student: AdminStudent }>(
+    `/api/admin/students/${id}`,
+    { method: "DELETE", skipAuthRedirect: false }
+  );
+}
+
