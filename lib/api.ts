@@ -392,8 +392,16 @@ export type EnrollStudentPayload = {
   lastName: string;
   email: string;
   classId?: string;
+  programId?: string; // NEW — published programme
   academicLevel?: string;
+  phone?: string;
   password?: string;
+  guardian?: {
+    fullName: string;
+    phone?: string;
+    email?: string;
+    relationship?: string;
+  };
 };
 
 export async function enrollStudent(payload: EnrollStudentPayload) {

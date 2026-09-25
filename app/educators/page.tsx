@@ -17,25 +17,24 @@ import {
   Clock,
   ShieldOff,
   Users,
-  CalendarDays,
-  CreditCard,
-  Activity,
-  FileText,
+  UserPlus,
+  Headphones,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 type EducatorDashboard = {
   students?: { total?: number };
-  learningPlans?: { total?: number; active?: number };
   payments?: {
     pending?: number;
     successful?: number;
     totalCollectedNaira?: number;
   };
-  todaysActivity?: {
-    totalSessionsScheduled?: number;
-    completed?: number;
-    remaining?: number;
+  commission?: {
+    totalEarnedNaira?: number;
+    pendingNaira?: number;
+  };
+  programmes?: {
+    active?: number;
+    total?: number;
   };
 };
 
@@ -137,8 +136,7 @@ export default function EducatorHomePage() {
                 (<span className="font-bold text-[var(--ink)]">{me.arqId}</span>)
               </>
             ) : null}
-            , but an admin must approve it before you can enroll students or
-            build learning plans.
+            , but an admin must approve it before you can enroll students.
           </p>
           <p className="mt-4 text-[12.5px] text-[var(--ink-3)] font-semibold">
             The sidebar stays locked until you are approved.
@@ -174,18 +172,14 @@ export default function EducatorHomePage() {
   }
 
   const studentsTotal = dash?.students?.total ?? 0;
-  const plansTotal = dash?.learningPlans?.total ?? 0;
-  const plansActive = dash?.learningPlans?.active ?? 0;
-  const payPending = dash?.payments?.pending ?? 0;
-  const paySuccess = dash?.payments?.successful ?? 0;
-  const collected = dash?.payments?.totalCollectedNaira ?? 0;
-  const todayTotal = dash?.todaysActivity?.totalSessionsScheduled ?? 0;
-  const todayDone = dash?.todaysActivity?.completed ?? 0;
-  const todayLeft = dash?.todaysActivity?.remaining ?? 0;
+  const commissionEarned = dash?.commission?.totalEarnedNaira ?? 0;
+  const commissionPending = dash?.commission?.pendingNaira ?? 0;
+  const activeProgrammes =
+    dash?.programmes?.active ?? dash?.programmes?.total ?? 0;
 
   return (
     <EducatorShell
-      title="Today"
+      title="Home"
       subtitle="Classroom"
       userName={fullName}
       arqId={me.arqId}
@@ -193,152 +187,79 @@ export default function EducatorHomePage() {
       onLogout={handleLogout}
     >
       <p className="text-[13px] text-[var(--ink-3)] mb-6">
-        Welcome back, {me.firstName}. Here is your classroom snapshot.
+        Welcome back, {me.firstName}.
       </p>
 
-      {/* Metric cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-        <Metric
-          icon={Users}
+      {/* Small metric cards */}
+      <div className="grid gap-3 grid-cols-3 mb-6">
+        <SmallMetric
           label="Students"
           value={String(studentsTotal)}
-          foot="Enrolled with you"
-          href="/educators/students"
+          foot="Enrolled"
         />
-        <Metric
-          icon={CalendarDays}
-          label="Learning plans"
-          value={String(plansActive)}
-          foot={`${plansTotal} total · ${plansActive} active`}
-          href="/educators/learning-plans"
-        />
-        <Metric
-          icon={CreditCard}
-          label="Collected"
-          value={`₦${collected.toLocaleString()}`}
-          foot={`${paySuccess} paid · ${payPending} pending`}
-        />
-        <Metric
-          icon={Activity}
-          label="Today"
-          value={`${todayDone}/${todayTotal}`}
+        <SmallMetric
+          label="Commission"
+          value={`₦${commissionEarned.toLocaleString()}`}
           foot={
-            todayLeft > 0
-              ? `${todayLeft} session${todayLeft === 1 ? "" : "s"} left`
-              : todayTotal === 0
-                ? "No sessions scheduled"
-                : "All sessions done"
+            commissionPending > 0
+              ? `₦${commissionPending.toLocaleString()} pending`
+              : "20% of paid plans"
           }
-          tone={todayLeft > 0 ? "warn" : "ok"}
+        />
+        <SmallMetric
+          label="Active programmes"
+          value={String(activeProgrammes)}
+          foot="With your students"
         />
       </div>
 
-      {/* Today strip */}
-      <section className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] p-5 mb-6">
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-          <h2 className="font-heading text-[14px] font-semibold text-[var(--ink)]">
-            Today&apos;s sessions
-          </h2>
-          <span className="text-[11.5px] font-bold text-[var(--ink-3)]">
-            {todayDone} completed · {todayLeft} remaining
-          </span>
-        </div>
-        <div className="h-2 rounded-full bg-[var(--surface-3)] overflow-hidden">
-          <i
-            className="block h-full rounded-full bg-[var(--brand)] transition-all"
-            style={{
-              width: `${
-                todayTotal > 0
-                  ? Math.round((todayDone / todayTotal) * 100)
-                  : 0
-              }%`,
-            }}
-          />
-        </div>
-        {todayTotal === 0 && (
-          <p className="mt-3 text-[12.5px] text-[var(--ink-3)]">
-            No student sessions on the calendar for today.
-          </p>
-        )}
-      </section>
-
-      {/* Quick links */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* Large action links */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <QuickLink
           href="/educators/students"
           icon={Users}
           title="My students"
-          desc="Enroll and open profiles"
+          desc="View learners and progress"
         />
         <QuickLink
-          href="/educators/learning-plans"
-          icon={CalendarDays}
-          title="Learning plans"
-          desc="Schedules and topics"
+          href="/educators/students/new"
+          icon={UserPlus}
+          title="Add new student"
+          desc="Enroll into a published programme"
         />
         <QuickLink
-          href="/educators/reports"
-          icon={FileText}
-          title="Reports"
-          desc="Assessment summaries"
+          href="/educators/contact-hq"
+          icon={Headphones}
+          title="Contact HQ"
+          desc="Reach ARQADEMY support"
         />
       </div>
     </EducatorShell>
   );
 }
 
-function Metric({
-  icon: Icon,
+function SmallMetric({
   label,
   value,
   foot,
-  href,
-  tone = "default",
 }: {
-  icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   foot: string;
-  href?: string;
-  tone?: "default" | "ok" | "warn";
 }) {
-  const body = (
-    <>
-      <div className="flex items-center gap-2 mb-2">
-        <div className="w-8 h-8 rounded-[8px] grid place-items-center bg-[var(--brand-soft)] text-[var(--brand)]">
-          <Icon className="w-4 h-4" />
-        </div>
-        <span className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
-          {label}
-        </span>
+  return (
+    <div className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] px-3 py-3 md:px-4 md:py-3.5 shadow-[var(--shadow-sm)] min-w-0">
+      <div className="text-[9px] md:text-[9.5px] font-bold tracking-[0.12em] uppercase text-[var(--ink-3)] truncate">
+        {label}
       </div>
-      <div
-        className={cn(
-          "font-heading text-[22px] font-semibold tabular-nums",
-          tone === "ok" && "text-[var(--ok)]",
-          tone === "warn" && "text-[var(--warn)]",
-          tone === "default" && "text-[var(--ink)]"
-        )}
-      >
+      <div className="font-heading text-[16px] md:text-[18px] font-semibold tabular-nums text-[var(--ink)] mt-1 truncate">
         {value}
       </div>
-      <p className="mt-1 text-[11.5px] text-[var(--ink-3)] font-semibold">
+      <p className="mt-0.5 text-[10px] md:text-[11px] text-[var(--ink-3)] font-semibold truncate">
         {foot}
       </p>
-    </>
+    </div>
   );
-
-  const className =
-    "rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)] block hover:border-[var(--brand)] transition";
-
-  if (href) {
-    return (
-      <Link href={href} className={className}>
-        {body}
-      </Link>
-    );
-  }
-  return <div className={className}>{body}</div>;
 }
 
 function QuickLink({

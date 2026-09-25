@@ -19,8 +19,8 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/educators", label: "Today", icon: LayoutDashboard, exact: true },
   { href: "/educators/students", label: "My students", icon: Users },
-  { href: "/educators/learning-plans", label: "Learning plans", icon: CalendarDays },
-  { href: "/educators/reports", label: "Reports", icon: FileText },
+  // { href: "/educators/learning-plans", label: "Learning plans", icon: CalendarDays },
+  // { href: "/educators/reports", label: "Reports", icon: FileText },
 ];
 
 type Props = {
@@ -84,10 +84,10 @@ export function EducatorShell({
               ARQADEMY
             </div>
             <div
-              className="text-[9px] font-bold tracking-[0.17em] uppercase mt-1"
+              className="text-[9px] font-bold tracking-[0.5em] uppercase mt-1"
               style={{ color: "var(--rail-ink)" }}
             >
-              Educator
+              NEXT CLASS
             </div>
           </div>
         </div>
@@ -154,12 +154,14 @@ export function EducatorShell({
           style={{ borderColor: "var(--rail-line)" }}
         >
           <div className="flex items-center justify-center md:justify-start gap-2.5">
-            <div
-              className="w-7 h-7 rounded-[8px] grid place-items-center flex-none text-[11px] font-heading font-semibold"
-              style={{ background: "rgba(47,211,201,.14)", color: "#2FD3C9" }}
-            >
-              {userName.slice(0, 1).toUpperCase()}
-            </div>
+            <Link href="profile">
+              <div
+                className="w-7 h-7 rounded-[8px] grid place-items-center flex-none text-[11px] font-heading font-semibold"
+                style={{ background: "rgba(47,211,201,.14)", color: "#2FD3C9" }}
+              >
+                {userName.slice(0, 1).toUpperCase()}
+              </div>
+            </Link>
 
             <div className="min-w-0 flex-1 hidden md:block">
               <div className="text-[11.5px] font-bold text-[#D6DEEE] truncate">{userName}</div>

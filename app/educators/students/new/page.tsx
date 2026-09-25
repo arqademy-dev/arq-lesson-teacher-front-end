@@ -9,9 +9,9 @@ import {
   enrollStudent,
   getEducatorMe,
   educatorLogout,
-  listAllClasses,
+  listPublishedProgrammes,
   ApiError,
-  type CurriculumClass,
+  type PublishedProgramme,
 } from "@/lib/api";
 import { EducatorShell } from "@/components/layout/EducatorShell";
 import { ArrowLeft, Loader2, Copy, Check } from "lucide-react";
@@ -23,13 +23,18 @@ const schema = z.object({
   firstName: z.string().min(1, "Required"),
   lastName: z.string().min(1, "Required"),
   email: z.string().email("Valid email required"),
-  classId: z.string().min(1, "Select a class"),
+  programId: z.string().min(1, "Select a programme"),
+  phone: z.string().optional(),
   academicLevel: z.string().optional(),
   password: z
     .string()
     .min(6, "At least 6 characters")
     .optional()
     .or(z.literal("")),
+  guardianName: z.string().optional(),
+  guardianPhone: z.string().optional(),
+  guardianEmail: z.string().optional(),
+  guardianRel: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -47,8 +52,8 @@ type EnrollResult = {
 export default function EnrollStudentPage() {
   const [name, setName] = useState("Educator");
   const [arqId, setArqId] = useState<string | undefined>();
-  const [classes, setClasses] = useState<CurriculumClass[]>([]);
-  const [classesLoading, setClassesLoading] = useState(true);
+  const [programmes, setProgrammes] = useState<PublishedProgramme[]>([]);
+  const [programmesLoading, setProgrammesLoading] = useState(true);
   const [result, setResult] = useState<EnrollResult | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -56,8 +61,6 @@ export default function EnrollStudentPage() {
   const {
     register,
     handleSubmit,
-    setValue,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -65,15 +68,17 @@ export default function EnrollStudentPage() {
       firstName: "",
       lastName: "",
       email: "",
-      classId: "",
+      programId: "",
+      phone: "",
       academicLevel: "",
       password: DEFAULT_PASSWORD,
+      guardianName: "",
+      guardianPhone: "",
+      guardianEmail: "",
+      guardianRel: "",
     },
   });
 
-  const selectedClassId = watch("classId");
-
-  // Load educator + classes
   useEffect(() => {
     getEducatorMe()
       .then((me) => {
@@ -82,28 +87,11 @@ export default function EnrollStudentPage() {
       })
       .catch(() => null);
 
-    listAllClasses()
-      .then((data) => {
-        const list = Array.isArray(data) ? data : [];
-        // Prefer active classes; fall back to all
-        const active = list.filter((c) => c.isActive !== false);
-        setClasses(active.length > 0 ? active : list);
-      })
-      .catch(() => setClasses([]))
-      .finally(() => setClassesLoading(false));
+    listPublishedProgrammes()
+      .then((data) => setProgrammes(Array.isArray(data) ? data : []))
+      .catch(() => setProgrammes([]))
+      .finally(() => setProgrammesLoading(false));
   }, []);
-
-  // When class changes → academicLevel = class title
-  useEffect(() => {
-    if (!selectedClassId) {
-      setValue("academicLevel", "");
-      return;
-    }
-    const cls = classes.find((c) => c.id === selectedClassId);
-    if (cls?.title) {
-      setValue("academicLevel", cls.title, { shouldValidate: true });
-    }
-  }, [selectedClassId, classes, setValue]);
 
   async function onSubmit(values: FormValues) {
     setServerError(null);
@@ -113,12 +101,18 @@ export default function EnrollStudentPage() {
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
         email: values.email.trim(),
-        classId: values.classId,
-        academicLevel:
-          values.academicLevel?.trim() ||
-          classes.find((c) => c.id === values.classId)?.title ||
-          undefined,
+        programId: values.programId,
+        phone: values.phone?.trim() || undefined,
+        academicLevel: values.academicLevel?.trim() || undefined,
         password: values.password?.trim() || undefined,
+        guardian: values.guardianName?.trim()
+          ? {
+              fullName: values.guardianName.trim(),
+              phone: values.guardianPhone?.trim() || undefined,
+              email: values.guardianEmail?.trim() || undefined,
+              relationship: values.guardianRel?.trim() || undefined,
+            }
+          : undefined,
       })) as EnrollResult;
       setResult(res);
     } catch (err) {
@@ -146,9 +140,7 @@ export default function EnrollStudentPage() {
     const text = [
       `Email: ${c.email ?? ""}`,
       `Arq ID: ${c.arqId ?? ""}`,
-      c.temporaryPassword
-        ? `Temporary password: ${c.temporaryPassword}`
-        : null,
+      c.temporaryPassword ? `Temporary password: ${c.temporaryPassword}` : null,
     ]
       .filter(Boolean)
       .join("\n");
@@ -156,8 +148,6 @@ export default function EnrollStudentPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
-
-  const studentId = result?.student?.id;
 
   return (
     <EducatorShell
@@ -193,36 +183,40 @@ export default function EnrollStudentPage() {
             <input type="email" className={inputClass} {...register("email")} />
           </Field>
 
-          {/* Class dropdown → drives academicLevel */}
-          <Field label="Class" error={errors.classId?.message}>
+          <Field label="Phone">
+            <input className={inputClass} {...register("phone")} />
+          </Field>
+
+          {/* Programme — same idea as admin */}
+          <Field label="Programme" error={errors.programId?.message}>
             <select
               className={inputClass}
-              disabled={classesLoading}
-              {...register("classId")}
+              disabled={programmesLoading}
+              {...register("programId")}
             >
               <option value="">
-                {classesLoading ? "Loading classes…" : "Select a class"}
+                {programmesLoading
+                  ? "Loading programmes…"
+                  : "Select a programme"}
               </option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title}
-                  {c.term ? ` · ${c.term}` : ""}
+              {programmes.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                  {p.topicCount != null ? ` · ${p.topicCount} topics` : ""}
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-[11px] text-[var(--ink-4)] font-semibold">
+              Only published programmes. Admin sets the learning plan later.
+            </p>
           </Field>
 
-          {/* Auto-filled from class name; still visible/editable if needed */}
           <Field label="Academic level">
             <input
-              className={cn(inputClass, "bg-[var(--surface-3)]")}
-              placeholder="Filled from class"
-              readOnly
+              className={inputClass}
+              placeholder="e.g. SS3 (optional)"
               {...register("academicLevel")}
             />
-            <p className="mt-1 text-[11px] text-[var(--ink-4)] font-semibold">
-              Set automatically from the selected class name.
-            </p>
           </Field>
 
           <Field label="Password" error={errors.password?.message}>
@@ -233,10 +227,34 @@ export default function EnrollStudentPage() {
               {...register("password")}
             />
             <p className="mt-1 text-[11px] text-[var(--ink-4)] font-semibold">
-              Default is {DEFAULT_PASSWORD}. Change if you want a different
-              password, or clear to let the server auto-generate.
+              Default is {DEFAULT_PASSWORD}. Clear to let the server
+              auto-generate.
             </p>
           </Field>
+
+          <div className="border-t border-[var(--line)] pt-3 space-y-3">
+            <p className="text-[10px] font-bold tracking-[0.12em] uppercase text-[var(--ink-3)]">
+              Parent / Guardian (optional)
+            </p>
+            <Field label="Full name">
+              <input className={inputClass} {...register("guardianName")} />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Phone">
+                <input className={inputClass} {...register("guardianPhone")} />
+              </Field>
+              <Field label="Email">
+                <input className={inputClass} {...register("guardianEmail")} />
+              </Field>
+            </div>
+            <Field label="Relationship">
+              <input
+                className={inputClass}
+                placeholder="mother, father…"
+                {...register("guardianRel")}
+              />
+            </Field>
+          </div>
 
           {serverError && (
             <p className="text-[12.5px] font-semibold text-[var(--danger)]">
@@ -246,7 +264,7 @@ export default function EnrollStudentPage() {
 
           <button
             type="submit"
-            disabled={isSubmitting || classesLoading}
+            disabled={isSubmitting || programmesLoading}
             className="w-full h-11 rounded-[10px] text-[13px] font-heading font-semibold bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)] disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
@@ -295,18 +313,17 @@ export default function EnrollStudentPage() {
             </div>
           )}
           <p className="text-[12.5px] text-[var(--ink-3)]">
-            Student can log in. Assign a learning plan next so they can start
-            sessions.
+            Student is linked to you and the programme. An admin will set their
+            learning plan; you earn commission when payment succeeds.
           </p>
           <div className="flex flex-wrap gap-2">
-            {studentId && (
-              <Link
-                href={`/educators/students/${studentId}/learning-plan`}
-                className="inline-flex h-10 px-4 items-center rounded-[9px] text-[12.5px] font-bold bg-[var(--brand)] text-white"
-              >
-                Assign learning plan →
-              </Link>
-            )}
+            <button
+              type="button"
+              onClick={() => setResult(null)}
+              className="inline-flex h-10 px-4 items-center rounded-[9px] text-[12.5px] font-bold bg-[var(--brand)] text-white"
+            >
+              Enroll another
+            </button>
             <Link
               href="/educators/students"
               className="inline-flex h-10 px-4 items-center rounded-[9px] text-[12.5px] font-bold border border-[var(--line)]"
