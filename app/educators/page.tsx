@@ -179,8 +179,8 @@ export default function EducatorHomePage() {
 
   return (
     <EducatorShell
-      title="Home"
-      subtitle="Classroom"
+      title="STAFF ROOM"
+      subtitle="Educator Workspace"
       userName={fullName}
       arqId={me.arqId}
       locked={locked}

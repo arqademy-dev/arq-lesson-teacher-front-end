@@ -154,7 +154,7 @@ export function EducatorShell({
           style={{ borderColor: "var(--rail-line)" }}
         >
           <div className="flex items-center justify-center md:justify-start gap-2.5">
-            <Link href="profile">
+            <Link href="/educators/profile">
               <div
                 className="w-7 h-7 rounded-[8px] grid place-items-center flex-none text-[11px] font-heading font-semibold"
                 style={{ background: "rgba(47,211,201,.14)", color: "#2FD3C9" }}
