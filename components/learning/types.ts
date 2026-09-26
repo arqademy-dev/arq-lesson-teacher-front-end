@@ -65,6 +65,7 @@ export type FillBlankConfig = {
   dropdown_options: Record<string, string[]>;
 };
 
+
 export type BranchingChoice = {
   id: string;
   text: string;
@@ -221,6 +222,13 @@ export type HotspotAnswer = Record<string, string>; // { zone_1: "..." }
 export type DragAndDropAnswer = Record<string, string>; // { d1: "zone_personification" }
 export type ImageSequencingAnswer = { order: string[] };
 export type MultipleChoiceAnswer = { answer: string };
+
+export type FillBlankCorrectAnswers = {
+  /** Single blank / free-text bank style */
+  acceptedAnswers?: string[];
+  /** Per-blank correct values (optional) */
+  [key: string]: string | string[] | undefined;
+};
 
 export type InteractionAnswer =
   | FillBlankAnswer

@@ -11,6 +11,7 @@ import type {
   ImageSequencingConfig,
   FileUploadConfig,
   SubmissionResult,
+  FillBlankAnswer,
 } from "../types";
 import { MultipleChoice } from "./MultipleChoice";
 import type { MultipleChoiceConfig } from "../types";
@@ -83,7 +84,10 @@ export function InteractionRenderer({
       {type === "fill_blank" && (
         <FillBlank
           config={cfg as FillBlankConfig}
-          disabled={disabled}
+          disabled={locked}
+          initialAnswer={
+            (initialAnswer as FillBlankAnswer | null) ?? null
+          }
           onReady={setAnswer}
         />
       )}

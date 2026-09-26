@@ -72,13 +72,14 @@ export function InteractiveVideoPlayer({
     [elements]
   );
 
-  const isCleared = useCallback(
-    (id: string) => {
-      const r = results[id];
-      return !!r && (r.isCorrect || !requireCorrectAnswersToProgress);
-    },
-    [results, requireCorrectAnswersToProgress]
-  );
+  // CHANGED — this used to be named `isCleared` and required a CORRECT answer
+  // (`r.isCorrect || !requireCorrectAnswersToProgress`) before the video was
+  // allowed to resume, which is the block you were hitting. It now only
+  // checks that the student answered at all — right or wrong — so playback
+  // is never held hostage by a wrong answer. `requireCorrectAnswersToProgress`
+  // still matters elsewhere (the backend still requires correct answers to
+  // mark the whole day complete); it just no longer pauses THIS video.
+  const isAnswered = useCallback((id: string) => !!results[id], [results]);
 
   const clearPoll = useCallback(() => {
     if (pollRef.current != null) {
@@ -136,8 +137,10 @@ export function InteractiveVideoPlayer({
       if (activeElementId) return; // a checkpoint is already open — hold
 
       const currentTime = player.getCurrentTime();
+      // CHANGED: was `!isCleared(e.id)` — a checkpoint the student already
+      // answered (even wrong) no longer re-triggers when they seek back past it.
       const next = checkpoints.find(
-        (e) => !isCleared(e.id) && currentTime >= (e.videoTimestampSeconds ?? 0)
+        (e) => !isAnswered(e.id) && currentTime >= (e.videoTimestampSeconds ?? 0)
       );
 
       if (next) {
@@ -149,12 +152,15 @@ export function InteractiveVideoPlayer({
     }, POLL_INTERVAL_MS);
 
     return clearPoll;
-  }, [ready, checkpoints, isCleared, activeElementId, clearPoll]);
+  }, [ready, checkpoints, isAnswered, activeElementId, clearPoll]);
 
   // React to the parent's results updating (i.e. handleSubmit resolved).
+  // CHANGED — this used to `return` early (stay paused) when the answer was
+  // wrong. It now schedules the resume as soon as ANY answer lands, so a
+  // wrong answer no longer blocks the video.
   useEffect(() => {
     if (!activeElementId) return;
-    if (!isCleared(activeElementId)) return; // still wrong + must retry — stay paused
+    if (!isAnswered(activeElementId)) return; // nothing submitted yet — stay paused
 
     advanceTimerRef.current = window.setTimeout(() => {
       setActiveElementId(null);
@@ -166,11 +172,11 @@ export function InteractiveVideoPlayer({
         window.clearTimeout(advanceTimerRef.current);
       }
     };
-  }, [results, activeElementId, isCleared]);
+  }, [results, activeElementId, isAnswered]);
 
   const activeElement = checkpoints.find((e) => e.id === activeElementId);
   const activeResult = activeElement ? results[activeElement.id] : undefined;
-  const activeSatisfied = !!activeElement && isCleared(activeElement.id);
+  const activeAnswered = !!activeElement && isAnswered(activeElement.id);
 
   return (
     <div className="space-y-3">
@@ -237,16 +243,40 @@ export function InteractiveVideoPlayer({
                 element={activeElement}
                 result={activeResult}
                 initialAnswer={priorAnswers[activeElement.id] ?? null}
+                // Still offered when the answer was wrong and the plan requires
+                // correctness overall — the student CAN retry for their own
+                // record, they just aren't forced to before the video resumes.
                 allowRetry={
                   requireCorrectAnswersToProgress &&
                   activeResult?.isCorrect === false
                 }
                 submitting={submittingId === activeElement.id}
-                onSubmit={(answer) =>
-                  onSubmitElement(activeElement.id, answer)
-                }
+                // onSubmit={(answer) =>
+                //   onSubmitElement(activeElement.id, answer)
+                // }
+
+                onSubmit={(answer) => {
+                  if (
+                    activeElement.interactionType === "fill_blank" &&
+                    answer &&
+                    typeof answer === "object"
+                  ) {
+                    const keys = Object.keys(answer as Record<string, unknown>);
+                    if (keys.length === 1) {
+                      const value = String(
+                        (answer as Record<string, unknown>)[keys[0]] ?? ""
+                      );
+                      onSubmitElement(activeElement.id, {
+                        ...(answer as Record<string, unknown>),
+                        answerText: value,
+                      } as InteractionAnswer);
+                      return;
+                    }
+                  }
+                  onSubmitElement(activeElement.id, answer);
+                }}
               />
-              {activeSatisfied && (
+              {activeAnswered && (
                 <p className="mt-3 text-[11.5px] font-semibold text-[var(--ink-4)]">
                   Resuming…
                 </p>
@@ -258,9 +288,9 @@ export function InteractiveVideoPlayer({
 
       {checkpoints.length > 0 && (
         <p className="text-[11.5px] text-[var(--ink-4)] font-semibold">
-          {checkpoints.filter((c) => isCleared(c.id)).length}/
+          {checkpoints.filter((c) => isAnswered(c.id)).length}/
           {checkpoints.length} checkpoint
-          {checkpoints.length === 1 ? "" : "s"} cleared
+          {checkpoints.length === 1 ? "" : "s"} answered
         </p>
       )}
     </div>

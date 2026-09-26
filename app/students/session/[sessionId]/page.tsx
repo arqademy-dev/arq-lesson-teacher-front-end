@@ -8,6 +8,7 @@ import {
   getStudentSession,
   completeSession,
   submitInteraction,
+  uploadSessionSummary,
   ApiError,
 } from "@/lib/api";
 import type {
@@ -27,17 +28,38 @@ import {
   CheckCircle2,
   Loader2,
   AlertTriangle,
+  Upload,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type SummarySection = { header: string; body: string };
+
+function normalizeFillBlankAnswer(
+  interactionType: string | undefined,
+  payload: InteractionAnswer
+): InteractionAnswer {
+  if (interactionType !== "fill_blank" || !payload || typeof payload !== "object") {
+    return payload;
+  }
+  const keys = Object.keys(payload as Record<string, unknown>);
+  if (keys.length !== 1) return payload;
+  const value = String((payload as Record<string, unknown>)[keys[0]] ?? "");
+  return {
+    ...(payload as Record<string, unknown>),
+    answerText: value,
+  } as InteractionAnswer;
+}
 
 export default function StudentSessionPage() {
   const params = useParams();
 
-  // Support both /students/session and /students/session/[sessionId]
   const sessionIdParam = useMemo(() => {
-    const raw = params?.sessionId ?? params?.slug;
-    if (typeof raw === "string") return raw;
-    if (Array.isArray(raw) && raw.length > 0) return raw[0];
+    const raw =
+      params?.sessionId ??
+      (Array.isArray(params?.slug) ? params.slug[0] : params?.slug);
+    if (typeof raw === "string" && raw.length > 0) return raw;
+    if (Array.isArray(raw) && raw[0]) return raw[0];
     return null;
   }, [params]);
 
@@ -53,6 +75,12 @@ export default function StudentSessionPage() {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const [completed, setCompleted] = useState(false);
+
+  // Daily summary upload (required on learning days)
+  const [summaryUploaded, setSummaryUploaded] = useState(false);
+  const [summaryFileName, setSummaryFileName] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -85,6 +113,20 @@ export default function StudentSessionPage() {
         }
         setResults(resMap);
         setPriorAnswers(ansMap);
+
+        // Backend may flag existing summary
+        const sess = session.session as {
+          summaryUploaded?: boolean;
+          summaryFileUrl?: string | null;
+          summaryFileName?: string | null;
+        };
+        if (sess.summaryUploaded || sess.summaryFileUrl) {
+          setSummaryUploaded(true);
+          setSummaryFileName(sess.summaryFileName ?? "Summary uploaded");
+        } else {
+          setSummaryUploaded(false);
+          setSummaryFileName(null);
+        }
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
@@ -95,9 +137,7 @@ export default function StudentSessionPage() {
           setError("Payment required before this session is available.");
           return;
         }
-        setError(
-          err instanceof Error ? err.message : "Failed to load session"
-        );
+        setError(err instanceof Error ? err.message : "Failed to load session");
       })
       .finally(() => setLoading(false));
   }, [sessionIdParam]);
@@ -128,45 +168,87 @@ export default function StudentSessionPage() {
   const requireCorrect = data?.requireCorrectAnswersToProgress !== false;
 
   const isReviewMode = Boolean(
-    data?.session?.isCompleted === true ||
-      (sessionIdParam && data?.session?.isCompleted)
+    data?.session &&
+      ((data.session as { isCompleted?: boolean }).isCompleted === true ||
+        (sessionIdParam &&
+          (data.session as { isCompleted?: boolean }).isCompleted))
   );
+
+  /** Learning day always requires summary file; quiz days never hit this page */
+  const summaryRequired = !isReviewMode;
+
+  const interactionsOk = useMemo(() => {
+    if (allElementIds.length === 0) return true;
+    if (!requireCorrect) {
+      // answered at least once each if you prefer: return allElementIds.every(id => results[id]);
+      return true;
+    }
+    return allElementIds.every((id) => results[id]?.isCorrect === true);
+  }, [allElementIds, results, requireCorrect]);
 
   const canComplete = useMemo(() => {
     if (!data || isReviewMode) return false;
-    if (allElementIds.length === 0) return true;
-    if (requireCorrect) {
-      return allElementIds.every((id) => results[id]?.isCorrect === true);
-    }
+    if (!interactionsOk) return false;
+    if (summaryRequired && !summaryUploaded) return false;
     return true;
-  }, [data, allElementIds, results, requireCorrect, isReviewMode]);
+  }, [data, isReviewMode, interactionsOk, summaryRequired, summaryUploaded]);
 
   const answeredCorrect = allElementIds.filter(
     (id) => results[id]?.isCorrect === true
   ).length;
 
-  async function handleSubmit(
-    elementId: string,
-    payload: InteractionAnswer
-  ) {
+  const summaryFormat: SummarySection[] = useMemo(() => {
+    const raw = (data?.topic as { summaryFormat?: SummarySection[] | null })
+      ?.summaryFormat;
+    return Array.isArray(raw) ? raw : [];
+  }, [data]);
+
+  async function handleSubmit(elementId: string, payload: InteractionAnswer) {
     if (!data) return;
+    const el = data.resources
+      .flatMap((r) => r.interactiveElements ?? [])
+      .find((e) => e.id === elementId);
+    const normalized = normalizeFillBlankAnswer(el?.interactionType, payload);
+
     setSubmittingId(elementId);
     try {
       const result = (await submitInteraction({
         interactiveElementId: elementId,
         scheduledSessionId: data.session.id,
-        response: payload as Record<string, unknown>,
+        response: normalized as Record<string, unknown>,
       })) as SubmissionResult;
 
       setResults((prev) => ({ ...prev, [elementId]: result }));
       setPriorAnswers((prev) => ({
         ...prev,
-        [elementId]: payload as Record<string, unknown>,
+        [elementId]: normalized as Record<string, unknown>,
       }));
     } catch (err) {
       alert(err instanceof Error ? err.message : "Submit failed");
     } finally {
       setSubmittingId(null);
+    }
+  }
+
+  async function handleSummaryFile(file: File | null) {
+    if (!file || !data || isReviewMode) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      await uploadSessionSummary(data.session.id, file);
+      setSummaryUploaded(true);
+      setSummaryFileName(file.name);
+    } catch (err) {
+      setUploadError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Upload failed"
+      );
+      setSummaryUploaded(false);
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -180,7 +262,7 @@ export default function StudentSessionPage() {
       alert(
         err instanceof Error
           ? err.message
-          : "Could not complete session. Check that every answer is correct if required."
+          : "Could not complete session. Finish checks and upload your summary."
       );
     } finally {
       setCompleting(false);
@@ -231,10 +313,10 @@ export default function StudentSessionPage() {
         <div className="max-w-lg mx-auto py-16 text-center px-4">
           <CheckCircle2 className="w-12 h-12 text-[var(--ok)] mx-auto mb-4" />
           <h1 className="font-heading text-[22px] text-[var(--ink)]">
-            Session complete
+            Day complete
           </h1>
           <p className="mt-2 text-[13px] text-[var(--ink-3)]">
-            Well done. The next scheduled day is unlocked.
+            Summary saved. The next learning day unlocks when due.
           </p>
           <Link
             href="/students/learning-plan"
@@ -252,7 +334,6 @@ export default function StudentSessionPage() {
   return (
     <Shell isReview={isReviewMode}>
       <main className="relative z-10 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-7">
-        {/* Header */}
         <div className="flex items-start justify-between gap-3 flex-wrap mb-5 sm:mb-6">
           <div className="min-w-0">
             <p className="text-[9.5px] font-bold tracking-[0.18em] uppercase text-[var(--brand)] mb-1">
@@ -267,6 +348,19 @@ export default function StudentSessionPage() {
             <h1 className="font-heading text-[19px] sm:text-[22px] text-[var(--ink)] leading-tight">
               {topic.title}
             </h1>
+            {topic.description && topic.description !== "string" && (
+              <p className="mt-1.5 text-[13px] text-[var(--ink-3)] max-w-[52ch]">
+                {topic.description}
+              </p>
+            )}
+            <p className="mt-2 text-[11.5px] text-[var(--ink-4)] font-semibold">
+              Scheduled · {session.scheduledDate}
+              {requireCorrect && allElementIds.length > 0 && (
+                <span className="ml-2">
+                  · Checks {answeredCorrect}/{allElementIds.length} correct
+                </span>
+              )}
+            </p>
           </div>
 
           {!isReviewMode && isOverdue && (
@@ -275,21 +369,19 @@ export default function StudentSessionPage() {
               Finish this before new sessions unlock
             </div>
           )}
-
           {isReviewMode && (
             <div className="flex items-center gap-2 px-3 py-2 rounded-[9px] bg-[var(--ok-soft)] text-[var(--ok)] text-[12px] font-bold flex-none">
               <CheckCircle2 className="w-4 h-4" />
-              Completed session
+              Completed
             </div>
           )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4 lg:gap-6">
-          {/* Resource list — desktop only, sticky while the stage scrolls */}
           <aside className="hidden lg:block rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] h-fit lg:sticky lg:top-5 overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--line-soft)]">
               <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
-                {isReviewMode ? "Parts" : "Today's parts"}
+                Today&apos;s parts
               </p>
             </div>
             <div className="p-2 max-h-[calc(100vh-140px)] overflow-y-auto">
@@ -299,7 +391,6 @@ export default function StudentSessionPage() {
                 const doneCount = els.filter(
                   (el) => results[el.id]?.isCorrect === true
                 ).length;
-                const total = els.length;
                 return (
                   <button
                     key={r.id}
@@ -317,7 +408,7 @@ export default function StudentSessionPage() {
                     </div>
                     <div className="text-[11px] mt-0.5 opacity-80 font-semibold">
                       {r.resourceType}
-                      {total > 0 && ` · ${doneCount}/${total} correct`}
+                      {els.length > 0 && ` · ${doneCount}/${els.length}`}
                     </div>
                   </button>
                 );
@@ -325,33 +416,25 @@ export default function StudentSessionPage() {
             </div>
           </aside>
 
-          {/* Stage */}
           <div className="min-w-0 space-y-4">
-            {/* Resource nav — mobile only, horizontal scroll strip */}
             {resources.length > 0 && (
               <div className="lg:hidden -mx-4 sm:-mx-6 px-4 sm:px-6 overflow-x-auto">
                 <div className="flex gap-2 w-max pb-1">
                   {resources.map((r, idx) => {
                     const active = r.id === activeResource?.id;
-                    const els = r.interactiveElements || [];
-                    const doneCount = els.filter(
-                      (el) => results[el.id]?.isCorrect === true
-                    ).length;
-                    const total = els.length;
                     return (
                       <button
                         key={r.id}
                         type="button"
                         onClick={() => setActiveResourceId(r.id)}
                         className={cn(
-                          "flex-none px-3 py-2 rounded-full text-[12px] font-bold whitespace-nowrap border-2 transition-colors",
+                          "flex-none px-3 py-2 rounded-full text-[12px] font-bold whitespace-nowrap border-2",
                           active
                             ? "bg-[var(--brand)] border-[var(--brand)] text-white"
                             : "bg-[var(--surface)] border-[var(--line)] text-[var(--ink-2)]"
                         )}
                       >
                         {idx + 1}. {r.title}
-                        {total > 0 && ` · ${doneCount}/${total}`}
                       </button>
                     );
                   })}
@@ -361,7 +444,7 @@ export default function StudentSessionPage() {
 
             {activeResource ? (
               <div className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden">
-                <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-[var(--line-soft)] flex items-center gap-2 min-w-0">
+                <div className="px-4 sm:px-5 py-3.5 border-b border-[var(--line-soft)] flex items-center gap-2 min-w-0">
                   <span className="text-[10px] font-bold tracking-wider uppercase text-[var(--ink-3)] bg-[var(--surface-3)] px-2 py-0.5 rounded flex-none">
                     {activeResource.resourceType}
                   </span>
@@ -369,7 +452,6 @@ export default function StudentSessionPage() {
                     {activeResource.title}
                   </span>
                 </div>
-
                 <div className="px-4 sm:px-5 py-4 sm:py-5">
                   <ResourceRenderer
                     resource={activeResource}
@@ -379,45 +461,34 @@ export default function StudentSessionPage() {
                     submittingId={submittingId}
                     onSubmitElement={handleSubmit}
                   />
-
-                  {!activeHandledInternally && (
-                    <>
-                      {(activeResource.interactiveElements || []).map((el) => {
-                        const result = results[el.id];
-                        const allowRetry =
-                          !isReviewMode &&
-                          requireCorrect &&
-                          result != null &&
-                          result.isCorrect === false;
-
-                        return (
-                          <div key={el.id} className="mt-2">
-                            {el.videoTimestampSeconds != null && (
-                              <p className="text-[11px] font-bold text-[var(--brand)] mb-1">
-                                Checkpoint @ {el.videoTimestampSeconds}s
-                              </p>
-                            )}
-                            <InteractionRenderer
-                              element={el}
-                              result={result}
-                              initialAnswer={priorAnswers[el.id] ?? null}
-                              allowRetry={allowRetry}
-                              submitting={submittingId === el.id}
-                              onSubmit={(payload) =>
-                                handleSubmit(el.id, payload)
-                              }
-                            />
-                          </div>
-                        );
-                      })}
-                      {(activeResource.interactiveElements || []).length ===
-                        0 && (
-                        <p className="mt-4 text-[13px] text-[var(--ink-3)]">
-                          No interactive checks on this part.
-                        </p>
-                      )}
-                    </>
-                  )}
+                  {!activeHandledInternally &&
+                    (activeResource.interactiveElements || []).map((el) => {
+                      const result = results[el.id];
+                      const allowRetry =
+                        !isReviewMode &&
+                        requireCorrect &&
+                        result != null &&
+                        result.isCorrect === false;
+                      return (
+                        <div key={el.id} className="mt-2">
+                          {el.videoTimestampSeconds != null && (
+                            <p className="text-[11px] font-bold text-[var(--brand)] mb-1">
+                              Checkpoint @ {el.videoTimestampSeconds}s
+                            </p>
+                          )}
+                          <InteractionRenderer
+                            element={el}
+                            result={result}
+                            initialAnswer={priorAnswers[el.id] ?? null}
+                            allowRetry={allowRetry}
+                            submitting={submittingId === el.id}
+                            onSubmit={(payload) =>
+                              handleSubmit(el.id, payload)
+                            }
+                          />
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             ) : (
@@ -426,28 +497,100 @@ export default function StudentSessionPage() {
               </div>
             )}
 
-            {/* Complete / Review footer */}
-            {isReviewMode ? (
-              <div className="pt-4 text-center space-y-2">
-                <p className="text-[13px] text-[var(--ink-3)] font-semibold">
-                  You are reviewing a completed session.
+            {/* Summary guide (topic.summaryFormat) */}
+            {summaryFormat.length > 0 && (
+              <section className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)]">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="w-4 h-4 text-[var(--brand)]" />
+                  <h2 className="font-heading text-[15px] font-semibold text-[var(--ink)]">
+                    Summary guide
+                  </h2>
+                </div>
+                <p className="text-[12.5px] text-[var(--ink-3)] mb-4">
+                  Use this outline when writing today&apos;s summary note.
                 </p>
+                <ul className="space-y-3">
+                  {summaryFormat.map((sec, i) => (
+                    <li
+                      key={i}
+                      className="rounded-[10px] border border-[var(--line-soft)] bg-[var(--surface-2)] px-4 py-3"
+                    >
+                      <div className="text-[13px] font-bold text-[var(--ink)]">
+                        {sec.header}
+                      </div>
+                      {sec.body && (
+                        <p className="mt-1 text-[12.5px] text-[var(--ink-3)] leading-relaxed">
+                          {sec.body}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* Required daily file upload — not on review; quiz days use quiz UI */}
+            {!isReviewMode && (
+              <section className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Upload className="w-4 h-4 text-[var(--brand)]" />
+                  <h2 className="font-heading text-[15px] font-semibold text-[var(--ink)]">
+                    Upload summary note
+                  </h2>
+                  <span className="text-[10px] font-bold uppercase text-[var(--warn)]">
+                    Required
+                  </span>
+                </div>
+                <p className="text-[12.5px] text-[var(--ink-3)] mb-4">
+                  Every learning day needs a summary file before you can
+                  complete the day. Quiz days are separate and do not use this
+                  upload.
+                </p>
+
+                {summaryUploaded ? (
+                  <div className="flex items-center gap-2 text-[13px] font-semibold text-[var(--ok)]">
+                    <CheckCircle2 className="w-4 h-4" />
+                    {summaryFileName || "Summary uploaded"}
+                  </div>
+                ) : (
+                  <label className="inline-flex items-center gap-2 h-11 px-4 rounded-[10px] text-[13px] font-bold border border-[var(--line)] bg-[var(--surface-2)] cursor-pointer hover:border-[var(--brand)]">
+                    {uploading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4" />
+                    )}
+                    {uploading ? "Uploading…" : "Choose file"}
+                    <input
+                      type="file"
+                      className="hidden"
+                      disabled={uploading}
+                      accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                      onChange={(e) =>
+                        handleSummaryFile(e.target.files?.[0] ?? null)
+                      }
+                    />
+                  </label>
+                )}
+                {uploadError && (
+                  <p className="mt-2 text-[12px] font-semibold text-[var(--danger)]">
+                    {uploadError}
+                  </p>
+                )}
+              </section>
+            )}
+
+            {isReviewMode ? (
+              <div className="pt-2 text-center">
                 <Link
                   href="/students/learning-plan"
-                  className="inline-flex items-center gap-2 text-[12.5px] font-bold text-[var(--brand)]"
+                  className="text-[12.5px] font-bold text-[var(--brand)]"
                 >
                   ← Back to learning plan
                 </Link>
               </div>
             ) : (
               <div className="sticky bottom-3 lg:static z-30">
-                <div
-                  className={cn(
-                    "rounded-[14px] px-4 py-3 flex flex-col items-stretch sm:items-end gap-2",
-                    "border border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md shadow-lg",
-                    "lg:border-0 lg:bg-transparent lg:backdrop-blur-none lg:shadow-none lg:px-0 lg:py-0"
-                  )}
-                >
+                <div className="rounded-[14px] px-4 py-3 flex flex-col items-stretch sm:items-end gap-2 border border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md shadow-lg lg:border-0 lg:bg-transparent lg:shadow-none lg:px-0">
                   <button
                     type="button"
                     onClick={handleComplete}
@@ -456,8 +599,7 @@ export default function StudentSessionPage() {
                       "w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-5 rounded-[10px] text-[13px] font-heading font-semibold",
                       canComplete
                         ? "bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)]"
-                        : "bg-[var(--surface-3)] text-[var(--ink-4)] cursor-not-allowed",
-                      "disabled:opacity-70"
+                        : "bg-[var(--surface-3)] text-[var(--ink-4)] cursor-not-allowed"
                     )}
                   >
                     {completing ? (
@@ -468,19 +610,20 @@ export default function StudentSessionPage() {
                     ) : (
                       <>
                         <CheckCircle2 className="w-4 h-4" />
-                        Mark session complete
+                        Complete day
                       </>
                     )}
                   </button>
-                  {!canComplete &&
-                    requireCorrect &&
-                    allElementIds.length > 0 && (
-                      <p className="text-[12px] text-[var(--warn)] font-semibold text-right max-w-sm">
-                        Answer every check correctly before you can finish
-                        this session ({answeredCorrect}/{allElementIds.length}
-                        ).
-                      </p>
-                    )}
+                  {!canComplete && (
+                    <p className="text-[12px] text-[var(--warn)] font-semibold text-right max-w-sm">
+                      {!interactionsOk && requireCorrect
+                        ? `Answer every check correctly (${answeredCorrect}/${allElementIds.length}). `
+                        : ""}
+                      {summaryRequired && !summaryUploaded
+                        ? "Upload your summary note."
+                        : ""}
+                    </p>
+                  )}
                 </div>
               </div>
             )}

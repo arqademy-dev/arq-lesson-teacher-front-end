@@ -1516,3 +1516,192 @@ export async function deactivateAdminStudent(id: string) {
   );
 }
 
+
+/* ============================================================
+   ADMIN — Question bank
+   ============================================================ */
+
+export type QuestionType = "multiple_choice" | "fill_blank";
+
+export type BankQuestion = {
+  id: string;
+  topicId: string;
+  topicTitle: string;
+  subjectId: string | null;
+  subjectTitle: string | null;
+  type: QuestionType;
+  text: string;
+  options: string[] | null;
+  correctIndex: number | null;
+  acceptedAnswers: string[] | null;
+  feedback: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ListQuestionsResult = {
+  items: BankQuestion[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type ListQuestionsQuery = {
+  subjectId?: string;
+  topicId?: string;
+  type?: QuestionType;
+  search?: string;
+  includeInactive?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
+ 
+export type CurriculumSubject = {
+  id: string;
+  title?: string;
+  name?: string; // some call sites read .name instead of .title defensively
+  description?: string | null;
+};
+ 
+
+function questionsQuery(q: ListQuestionsQuery = {}): string {
+  const p = new URLSearchParams();
+  if (q.subjectId) p.set("subjectId", q.subjectId);
+  if (q.topicId) p.set("topicId", q.topicId);
+  if (q.type) p.set("type", q.type);
+  if (q.search) p.set("search", q.search);
+  if (q.includeInactive) p.set("includeInactive", "true");
+  if (q.limit != null) p.set("limit", String(q.limit));
+  if (q.offset != null) p.set("offset", String(q.offset));
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+export async function listBankQuestions(query: ListQuestionsQuery = {}) {
+  return api<ListQuestionsResult>(
+    `/api/admin/questions${questionsQuery(query)}`,
+    { skipAuthRedirect: false }
+  );
+}
+
+export async function getBankQuestion(id: string) {
+  return api<BankQuestion>(`/api/admin/questions/${id}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+export type CreateBankQuestionPayload =
+  | {
+      type: "multiple_choice";
+      topicId: string;
+      text: string;
+      options: string[];
+      correctIndex: number;
+      feedback?: string;
+    }
+  | {
+      type: "fill_blank";
+      topicId: string;
+      text: string;
+      acceptedAnswers: string[];
+      feedback?: string;
+    };
+
+export async function createBankQuestion(body: CreateBankQuestionPayload) {
+  return api<BankQuestion>("/api/admin/questions", {
+    method: "POST",
+    body,
+    skipAuthRedirect: false,
+  });
+}
+
+export type UpdateBankQuestionPayload = {
+  topicId?: string;
+  text?: string;
+  options?: string[];
+  correctIndex?: number;
+  acceptedAnswers?: string[];
+  feedback?: string | null;
+  isActive?: boolean;
+};
+
+export async function updateBankQuestion(
+  id: string,
+  body: UpdateBankQuestionPayload
+) {
+  return api<BankQuestion>(`/api/admin/questions/${id}`, {
+    method: "PATCH",
+    body,
+    skipAuthRedirect: false,
+  });
+}
+
+/** Soft-delete (archive) */
+export async function archiveBankQuestion(id: string) {
+  return api<{ message: string; question: BankQuestion }>(
+    `/api/admin/questions/${id}`,
+    { method: "DELETE", skipAuthRedirect: false }
+  );
+}
+
+export type QuestionCoverage = {
+  topics: Array<{
+    topicId: string;
+    sequenceOrder: number;
+    title: string;
+    subjectTitle: string | null;
+    questionCount: number;
+  }>;
+  totalQuestions: number;
+};
+
+export async function getQuestionCoverage(programmeId: string) {
+  return api<QuestionCoverage>(
+    `/api/admin/questions/coverage?programmeId=${encodeURIComponent(programmeId)}`,
+    { skipAuthRedirect: false }
+  );
+}
+/** Daily summary upload for a scheduled learning day */
+export async function uploadSessionSummary(
+  scheduledSessionId: string,
+  file: File
+) {
+  const API_BASE =
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
+    (typeof window !== "undefined"
+      ? "/backend"
+      : "https://arq-lesson-teacher-back-end.onrender.com");
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("scheduledSessionId", scheduledSessionId);
+  // form.append("kind", "summary"); // if your API expects it
+
+  const res = await fetch(
+    `${API_BASE}/api/students/me/sessions/${scheduledSessionId}/summary`,
+    {
+      method: "POST",
+      credentials: "include",
+      body: form,
+      // do NOT set Content-Type — browser sets multipart boundary
+    }
+  );
+
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      message = (body as { message?: string }).message || message;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, message);
+  }
+  return res.json() as Promise<{
+    id?: string;
+    url?: string;
+    fileName?: string;
+  }>;
+}

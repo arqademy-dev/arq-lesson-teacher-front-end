@@ -1,77 +1,163 @@
 "use client";
 
-import { useState } from "react";
-import { Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus, Loader2, Search } from "lucide-react";
+import { toast } from "sonner";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { QuestionCard } from "@/components/questions/QuestionCard";
 import { QuestionFormModal } from "@/components/questions/QuestionFormModal";
-import { SUBJECTS, type Question, type Subject } from "@/lib/question-bank";
-import { insertQuestion, removeQuestion, replaceQuestion } from "@/lib/question-utils";
+import {
+  listBankQuestions,
+  createBankQuestion,
+  updateBankQuestion,
+  archiveBankQuestion,
+  listSubjects,
+  listTopics,
+  ApiError,
+  type BankQuestion,
+  type CreateBankQuestionPayload,
+  type QuestionType,
+} from "@/lib/api";
 
-const ALL_TOPICS = "all";
-
-const selectClass =
-  "w-full px-5 py-3 border border-[var(--line)] rounded-[var(--r-card)] bg-[var(--surface)] text-[var(--ink)] font-semibold";
-
-const labelClass =
-  "block text-xs font-bold uppercase tracking-wider text-[var(--ink-3)] mb-2";
-
-// What the form modal is doing (null = closed). For "edit", subjectId/topicId
-// are where the question currently lives.
-type FormTarget = {
-  mode: "add" | "edit";
-  subjectId: string;
-  topicId: string;
-  question?: Question;
-};
+const ALL = "";
 
 export default function AdminQuestionsPage() {
-  const [subjects, setSubjects] = useState<Subject[]>(SUBJECTS);
-  const [subjectId, setSubjectId] = useState(SUBJECTS[0].id);
-  const [topicId, setTopicId] = useState<string>(ALL_TOPICS);
-  const [formTarget, setFormTarget] = useState<FormTarget | null>(null);
+  const [subjects, setSubjects] = useState<
+    Array<{ id: string; name?: string; title?: string }>
+  >([]);
+  const [topics, setTopics] = useState<
+    Array<{ id: string; title: string; subjectId?: string | null }>
+  >([]);
+  const [items, setItems] = useState<BankQuestion[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const currentSubject = subjects.find((s) => s.id === subjectId) ?? subjects[0];
+  const [subjectId, setSubjectId] = useState(ALL);
+  const [topicId, setTopicId] = useState(ALL);
+  const [typeFilter, setTypeFilter] = useState<QuestionType | "">("");
+  const [search, setSearch] = useState("");
 
-  const visibleTopics =
-    topicId === ALL_TOPICS
-      ? currentSubject.topics
-      : currentSubject.topics.filter((t) => t.id === topicId);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<BankQuestion | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const totalQuestions = visibleTopics.reduce((sum, t) => sum + t.questions.length, 0);
+  useEffect(() => {
+    listSubjects()
+      .then((s) => setSubjects(Array.isArray(s) ? s : []))
+      .catch(() => {});
+    listTopics({})
+      .then((t) => setTopics(Array.isArray(t) ? t : []))
+      .catch(() => {});
+  }, []);
 
-  const onSubjectChange = (id: string) => {
-    setSubjectId(id);
-    setTopicId(ALL_TOPICS);
-  };
-
-  const handleSave = (targetSubjectId: string, targetTopicId: string, question: Question) => {
-    const origin = formTarget;
-
-    setSubjects((prev) => {
-      if (origin?.mode === "edit") {
-        const stayedPut =
-          origin.subjectId === targetSubjectId && origin.topicId === targetTopicId;
-
-        // Same topic: update in place. Different topic: move it to the end of the new one.
-        return stayedPut
-          ? replaceQuestion(prev, question)
-          : insertQuestion(removeQuestion(prev, question.id), targetSubjectId, targetTopicId, question);
-      }
-      return insertQuestion(prev, targetSubjectId, targetTopicId, question);
-    });
-
-    // Jump to where the question now lives so it's visible straight away
-    setSubjectId(targetSubjectId);
-    setTopicId(targetTopicId);
-    setFormTarget(null);
-  };
-
-  const handleDelete = (questionId: string) => {
-    if (confirm("Delete this question?")) {
-      setSubjects((prev) => removeQuestion(prev, questionId));
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listBankQuestions({
+        subjectId: subjectId || undefined,
+        topicId: topicId || undefined,
+        type: typeFilter || undefined,
+        search: search.trim() || undefined,
+        limit: 100,
+      });
+      setItems(res.items ?? []);
+      setTotal(res.total ?? 0);
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Failed to load questions"
+      );
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [subjectId, topicId, typeFilter, search]);
+
+  useEffect(() => {
+    const t = setTimeout(load, 200);
+    return () => clearTimeout(t);
+  }, [load]);
+
+  const topicsForFilter = useMemo(
+    () =>
+      subjectId
+        ? topics.filter((t) => t.subjectId === subjectId)
+        : topics,
+    [topics, subjectId]
+  );
+
+  // Group by topic for display
+  const byTopic = useMemo(() => {
+    const map = new Map<string, { title: string; subject: string; list: BankQuestion[] }>();
+    for (const q of items) {
+      const key = q.topicId;
+      if (!map.has(key)) {
+        map.set(key, {
+          title: q.topicTitle,
+          subject: q.subjectTitle ?? "—",
+          list: [],
+        });
+      }
+      map.get(key)!.list.push(q);
+    }
+    return Array.from(map.entries());
+  }, [items]);
+
+  async function handleSave(payload: {
+    mode: "add" | "edit";
+    id?: string;
+    body: CreateBankQuestionPayload | Record<string, unknown>;
+  }) {
+    setSaving(true);
+    try {
+      if (payload.mode === "add") {
+        await createBankQuestion(payload.body as CreateBankQuestionPayload);
+        toast.success("Question created");
+      } else if (payload.id) {
+        const b = payload.body as CreateBankQuestionPayload;
+        // Type is immutable — only send updatable fields
+        if (b.type === "multiple_choice") {
+          await updateBankQuestion(payload.id, {
+            topicId: b.topicId,
+            text: b.text,
+            options: b.options,
+            correctIndex: b.correctIndex,
+            feedback: b.feedback ?? null,
+          });
+        } else {
+          await updateBankQuestion(payload.id, {
+            topicId: b.topicId,
+            text: b.text,
+            acceptedAnswers: b.acceptedAnswers,
+            feedback: b.feedback ?? null,
+          });
+        }
+        toast.success("Question updated");
+      }
+      setFormOpen(false);
+      setEditing(null);
+      await load();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Save failed"
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Archive this question? It stays in the DB for quiz history.")) {
+      return;
+    }
+    try {
+      await archiveBankQuestion(id);
+      toast.success("Question archived");
+      await load();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Archive failed"
+      );
+    }
+  }
 
   return (
     <AdminShell
@@ -80,106 +166,168 @@ export default function AdminQuestionsPage() {
       pendingCount={0}
       onLogout={() => (window.location.href = "/admin/login")}
     >
-      <div className="max-w-5xl mx-auto space-y-8">
-        {/* Filters */}
-        <div className="card border border-[var(--line)] p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="card border border-[var(--line)] p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className={labelClass}>Subject</label>
+              <label className="block text-xs font-bold uppercase text-[var(--ink-3)] mb-2">
+                Subject
+              </label>
               <select
-                value={currentSubject.id}
-                onChange={(e) => onSubjectChange(e.target.value)}
-                className={selectClass}
+                className="w-full px-4 py-3 border border-[var(--line)] rounded-[var(--r-card)] bg-[var(--surface)]"
+                value={subjectId}
+                onChange={(e) => {
+                  setSubjectId(e.target.value);
+                  setTopicId(ALL);
+                }}
               >
+                <option value={ALL}>All subjects</option>
                 {subjects.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name}
+                    {s.name ?? s.title}
                   </option>
                 ))}
               </select>
             </div>
-
             <div>
-              <label className={labelClass}>Topic</label>
+              <label className="block text-xs font-bold uppercase text-[var(--ink-3)] mb-2">
+                Topic
+              </label>
               <select
+                className="w-full px-4 py-3 border border-[var(--line)] rounded-[var(--r-card)] bg-[var(--surface)]"
                 value={topicId}
                 onChange={(e) => setTopicId(e.target.value)}
-                className={selectClass}
               >
-                <option value={ALL_TOPICS}>All topics ({currentSubject.topics.length})</option>
-                {currentSubject.topics.map((t) => (
+                <option value={ALL}>All topics</option>
+                {topicsForFilter.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name}
+                    {t.title}
                   </option>
                 ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase text-[var(--ink-3)] mb-2">
+                Type
+              </label>
+              <select
+                className="w-full px-4 py-3 border border-[var(--line)] rounded-[var(--r-card)] bg-[var(--surface)]"
+                value={typeFilter}
+                onChange={(e) =>
+                  setTypeFilter(e.target.value as QuestionType | "")
+                }
+              >
+                <option value="">All types</option>
+                <option value="multiple_choice">Multiple choice</option>
+                <option value="fill_blank">Fill in the blank</option>
               </select>
             </div>
           </div>
 
-          <p className="mt-4 text-xs text-[var(--ink-3)]">
-            {totalQuestions} question{totalQuestions === 1 ? "" : "s"} in {currentSubject.name}
-            {topicId !== ALL_TOPICS && visibleTopics[0] ? ` • ${visibleTopics[0].name}` : ""}
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-3)]" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search question text…"
+                className="w-full pl-10 pr-4 py-2.5 border border-[var(--line)] rounded-[var(--r-card)] bg-[var(--surface)] text-sm"
+              />
+            </div>
+            <button
+              className="btn teal small ml-auto"
+              onClick={() => {
+                setEditing(null);
+                setFormOpen(true);
+              }}
+            >
+              <Plus className="w-4 h-4" />
+              Add question
+            </button>
+          </div>
+
+          <p className="text-xs text-[var(--ink-3)]">
+            {total} question{total === 1 ? "" : "s"}
           </p>
         </div>
 
-        {/* One view card per topic */}
-        {visibleTopics.map((topic) => (
-          <section key={topic.id} className="card border border-[var(--line)] p-6 md:p-8">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-              <div className="min-w-0">
-                <div className="eyebrow text-[var(--brand)]">{currentSubject.name}</div>
-                <h3 className="font-heading text-2xl font-semibold mt-1">{topic.name}</h3>
-                <p className="text-xs text-[var(--ink-3)] mt-1">
-                  {topic.questions.length} question{topic.questions.length === 1 ? "" : "s"}
-                </p>
-              </div>
+        {loading && (
+          <div className="flex items-center gap-2 text-[var(--ink-3)] py-8">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+          </div>
+        )}
 
-              <button
-                onClick={() =>
-                  setFormTarget({ mode: "add", subjectId: currentSubject.id, topicId: topic.id })
-                }
-                className="btn teal small"
-              >
-                <Plus className="w-4 h-4" />
-                Add Question
-              </button>
-            </div>
+        {!loading && byTopic.length === 0 && (
+          <div className="rounded-[var(--r-card)] border border-dashed border-[var(--line)] p-12 text-center text-sm text-[var(--ink-3)]">
+            No questions match. Add one or clear filters.
+          </div>
+        )}
 
-            {topic.questions.length === 0 ? (
-              <div className="rounded-[var(--r-card)] border border-dashed border-[var(--line)] p-10 text-center text-sm text-[var(--ink-3)]">
-                No questions in this topic yet.
+        {!loading &&
+          byTopic.map(([tid, group]) => (
+            <section
+              key={tid}
+              className="card border border-[var(--line)] p-6 md:p-8"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div>
+                  <div className="eyebrow text-[var(--brand)]">
+                    {group.subject}
+                  </div>
+                  <h3 className="font-heading text-2xl font-semibold mt-1">
+                    {group.title}
+                  </h3>
+                  <p className="text-xs text-[var(--ink-3)] mt-1">
+                    {group.list.length} question
+                    {group.list.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <button
+                  className="btn teal small"
+                  onClick={() => {
+                    setEditing(null);
+                    setTopicId(tid);
+                    setFormOpen(true);
+                  }}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add question
+                </button>
               </div>
-            ) : (
               <div className="space-y-5">
-                {topic.questions.map((q, i) => (
+                {group.list.map((q, i) => (
                   <QuestionCard
                     key={q.id}
                     question={q}
                     number={i + 1}
-                    onEdit={() =>
-                      setFormTarget({
-                        mode: "edit",
-                        subjectId: currentSubject.id,
-                        topicId: topic.id,
-                        question: q,
-                      })
-                    }
+                    onEdit={() => {
+                      setEditing(q);
+                      setFormOpen(true);
+                    }}
                     onDelete={() => handleDelete(q.id)}
                   />
                 ))}
               </div>
-            )}
-          </section>
-        ))}
+            </section>
+          ))}
       </div>
 
       <QuestionFormModal
-        open={formTarget !== null}
-        onClose={() => setFormTarget(null)}
-        subjects={subjects}
-        defaultSubjectId={formTarget?.subjectId ?? currentSubject.id}
-        defaultTopicId={formTarget?.topicId ?? currentSubject.topics[0].id}
-        question={formTarget?.question}
+        open={formOpen}
+        onClose={() => {
+          setFormOpen(false);
+          setEditing(null);
+        }}
+        subjects={subjects as never}
+        topics={topics as never}
+        defaultSubjectId={
+          editing?.subjectId ?? (subjectId || subjects[0]?.id || "")
+        }
+        defaultTopicId={
+          editing?.topicId ?? (topicId || topics[0]?.id || "")
+        }
+        question={editing}
+        saving={saving}
         onSave={handleSave}
       />
     </AdminShell>
