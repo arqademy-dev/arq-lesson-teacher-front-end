@@ -46,6 +46,9 @@ export function PlanSetup({ programmes, onSave }: Props) {
   const [weeks, setWeeks] = useState(5);
   const [quizDay, setQuizDay] = useState<"friday" | "saturday">("friday");
   const [quizSize, setQuizSize] = useState(50);
+  const [quizDurationMinutes, setQuizDurationMinutes] = useState<number | "">(
+  30
+); // or "" for untimed
   const [startDate, setStartDate] = useState(nextMondayYmd());
   const [saving, setSaving] = useState(false);
 
@@ -114,6 +117,8 @@ export function PlanSetup({ programmes, onSave }: Props) {
         quizSize,
         startDate,
         requireCorrectAnswersToProgress: true,
+        quizDurationMinutes:
+          quizDurationMinutes === "" ? null : quizDurationMinutes,
       });
     } finally {
       setSaving(false);
@@ -227,6 +232,29 @@ export function PlanSetup({ programmes, onSave }: Props) {
                   {n} questions
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            {/* // In the form UI: */}
+            <label className="block text-xs font-bold uppercase tracking-wider text-[var(--ink-3)] mb-2">
+              Quiz time limit (minutes)
+            </label>
+            <select
+              value={quizDurationMinutes === "" ? "" : String(quizDurationMinutes)}
+              onChange={(e) =>
+                setQuizDurationMinutes(
+                  e.target.value === "" ? "" : Number(e.target.value)
+                )
+              }
+              className="w-full px-4 py-3 border border-[var(--line)] rounded-[var(--r-card)]"
+            >
+              <option value="">Untimed</option>
+              <option value="15">15</option>
+              <option value="20">20</option>
+              <option value="30">30</option>
+              <option value="45">45</option>
+              <option value="60">60</option>
+              <option value="90">90</option>
             </select>
           </div>
 

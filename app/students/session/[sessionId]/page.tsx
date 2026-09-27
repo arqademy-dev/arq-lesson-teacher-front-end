@@ -203,32 +203,29 @@ export default function StudentSessionPage() {
     return Array.isArray(raw) ? raw : [];
   }, [data]);
 
-  async function handleSubmit(elementId: string, payload: InteractionAnswer) {
-    if (!data) return;
-    const el = data.resources
-      .flatMap((r) => r.interactiveElements ?? [])
-      .find((e) => e.id === elementId);
-    const normalized = normalizeFillBlankAnswer(el?.interactionType, payload);
-
-    setSubmittingId(elementId);
-    try {
-      const result = (await submitInteraction({
-        interactiveElementId: elementId,
-        scheduledSessionId: data.session.id,
-        response: normalized as Record<string, unknown>,
-      })) as SubmissionResult;
-
-      setResults((prev) => ({ ...prev, [elementId]: result }));
-      setPriorAnswers((prev) => ({
-        ...prev,
-        [elementId]: normalized as Record<string, unknown>,
-      }));
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Submit failed");
-    } finally {
-      setSubmittingId(null);
-    }
+async function handleSubmit(elementId: string, payload: InteractionAnswer) {
+  if (!data) return;
+  setSubmittingId(elementId);
+  try {
+    const result = await submitInteraction({
+      interactiveElementId: elementId,
+      scheduledSessionId: data.session.id,
+      response: payload as Record<string, unknown>,
+    });
+    setResults((prev) => ({ 
+      ...prev, 
+      [elementId]: result as SubmissionResult 
+    }));    
+    setPriorAnswers((prev) => ({
+      ...prev,
+      [elementId]: payload as Record<string, unknown>,
+    }));
+  } catch (err) {
+    alert(err instanceof Error ? err.message : "Submit failed");
+  } finally {
+    setSubmittingId(null);
   }
+}
 
   async function handleSummaryFile(file: File | null) {
     if (!file || !data || isReviewMode) return;

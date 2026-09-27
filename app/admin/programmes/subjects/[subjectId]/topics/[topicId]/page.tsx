@@ -303,12 +303,25 @@ export default function SingleTopicPage() {
                           <div className="font-medium text-sm">
                             {el.interactionType.replace(/_/g, " ")}
                           </div>
-                          {el.interactionType === "interactive_video" && (
+                          {/* {el.interactionType === "interactive_video" && (
                             <div className="text-xs text-[var(--ink-3)]">
                               at {el.videoTimestampSeconds ?? 0}s
                               {el.pauseOnTrigger ? " · pauses" : ""}
                             </div>
+                          )} */}
+                          {(el.interactionType === "multiple_choice" ||
+                          el.interactionType === "fill_blank") &&
+                          el.videoTimestampSeconds != null && (
+                            <div className="text-xs text-[var(--ink-3)]">
+                              at {el.videoTimestampSeconds}s
+                              {el.pauseOnTrigger ? " · pauses" : ""}
+                            </div>
                           )}
+                        {el.interactionType === "file_upload" && (
+                          <div className="text-xs text-[var(--ink-3)]">
+                            Required day upload
+                          </div>
+                        )}
                         </button>
                         <div className="flex gap-2 flex-none">
                           <button

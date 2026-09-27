@@ -145,17 +145,17 @@ export async function completeSession(sessionId: string) {
   });
 }
 
-export async function submitInteraction(payload: {
-  interactiveElementId: string;
-  scheduledSessionId: string;
-  response: Record<string, unknown>;
-}) {
-  return api("/api/students/me/submissions", {
-    method: "POST",
-    body: payload,
-    skipAuthRedirect: false,
-  });
-}
+// export async function submitInteraction(payload: {
+//   interactiveElementId: string;
+//   scheduledSessionId: string;
+//   response: Record<string, unknown>;
+// }) {
+//   return api("/api/students/me/submissions", {
+//     method: "POST",
+//     body: payload,
+//     skipAuthRedirect: false,
+//   });
+// }
 
 /* ============================================================
    STUDENT — Own learning plan breakdown
@@ -205,19 +205,19 @@ export type PresignedUploadResponse = {
   key: string;
 };
  
-export async function getStudentPresignedUploadUrl(
-  fileName: string,
-  contentType: string
-) {
-  return api<PresignedUploadResponse>(
-    "/api/students/me/files/presigned-upload-url",
-    {
-      method: "POST",
-      body: { fileName, contentType },
-      skipAuthRedirect: false,
-    }
-  );
-}
+// export async function getStudentPresignedUploadUrl(
+//   fileName: string,
+//   contentType: string
+// ) {
+//   return api<PresignedUploadResponse>(
+//     "/api/students/me/files/presigned-upload-url",
+//     {
+//       method: "POST",
+//       body: { fileName, contentType },
+//       skipAuthRedirect: false,
+//     }
+//   );
+// }
 
 export async function getStudentBatchPresignedUploadUrls(
   files: { fileName: string; contentType: string }[]
@@ -1314,14 +1314,14 @@ export async function removeTopicFromProgramme(
    ADMIN — Programme learning plan (per student)
    ============================================================ */
 
-export type CreateProgrammePlanPayload = {
-  programmeId: string;
-  weeks: number;
-  quizDay: "friday" | "saturday";
-  quizSize: number;
-  startDate: string; // YYYY-MM-DD — must be a Monday
-  requireCorrectAnswersToProgress?: boolean;
-};
+// export type CreateProgrammePlanPayload = {
+//   programmeId: string;
+//   weeks: number;
+//   quizDay: "friday" | "saturday";
+//   quizSize: number;
+//   startDate: string; // YYYY-MM-DD — must be a Monday
+//   requireCorrectAnswersToProgress?: boolean;
+// };
 
 export type ProgrammeLearningPlan = {
   id: string;
@@ -1337,6 +1337,7 @@ export type ProgrammeLearningPlan = {
   preferredDays?: string[];
   requireCorrectAnswersToProgress?: boolean;
   createdAt?: string;
+  quizDurationMinutes?: number | null;
 };
 
 export type CreateProgrammePlanResult = {
@@ -1345,15 +1346,15 @@ export type CreateProgrammePlanResult = {
   amountNaira: number;
 };
 
-export async function createStudentProgrammePlan(
-  studentId: string,
-  body: CreateProgrammePlanPayload
-) {
-  return api<CreateProgrammePlanResult>(
-    `/api/admin/students/${studentId}/learning-plan`,
-    { method: "POST", body, skipAuthRedirect: false }
-  );
-}
+// export async function createStudentProgrammePlan(
+//   studentId: string,
+//   body: CreateProgrammePlanPayload
+// ) {
+//   return api<CreateProgrammePlanResult>(
+//     `/api/admin/students/${studentId}/learning-plan`,
+//     { method: "POST", body, skipAuthRedirect: false }
+//   );
+// }
 
 export type WeeklyQuizSummary = {
   id: string;
@@ -1523,22 +1524,22 @@ export async function deactivateAdminStudent(id: string) {
 
 export type QuestionType = "multiple_choice" | "fill_blank";
 
-export type BankQuestion = {
-  id: string;
-  topicId: string;
-  topicTitle: string;
-  subjectId: string | null;
-  subjectTitle: string | null;
-  type: QuestionType;
-  text: string;
-  options: string[] | null;
-  correctIndex: number | null;
-  acceptedAnswers: string[] | null;
-  feedback: string | null;
-  isActive: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-};
+// export type BankQuestion = {
+//   id: string;
+//   topicId: string;
+//   topicTitle: string;
+//   subjectId: string | null;
+//   subjectTitle: string | null;
+//   type: QuestionType;
+//   text: string;
+//   options: string[] | null;
+//   correctIndex: number | null;
+//   acceptedAnswers: string[] | null;
+//   feedback: string | null;
+//   isActive: boolean;
+//   createdAt?: string;
+//   updatedAt?: string;
+// };
 
 export type ListQuestionsResult = {
   items: BankQuestion[];
@@ -1592,22 +1593,22 @@ export async function getBankQuestion(id: string) {
   });
 }
 
-export type CreateBankQuestionPayload =
-  | {
-      type: "multiple_choice";
-      topicId: string;
-      text: string;
-      options: string[];
-      correctIndex: number;
-      feedback?: string;
-    }
-  | {
-      type: "fill_blank";
-      topicId: string;
-      text: string;
-      acceptedAnswers: string[];
-      feedback?: string;
-    };
+// export type CreateBankQuestionPayload =
+//   | {
+//       type: "multiple_choice";
+//       topicId: string;
+//       text: string;
+//       options: string[];
+//       correctIndex: number;
+//       feedback?: string;
+//     }
+//   | {
+//       type: "fill_blank";
+//       topicId: string;
+//       text: string;
+//       acceptedAnswers: string[];
+//       feedback?: string;
+//     };
 
 export async function createBankQuestion(body: CreateBankQuestionPayload) {
   return api<BankQuestion>("/api/admin/questions", {
@@ -1616,16 +1617,6 @@ export async function createBankQuestion(body: CreateBankQuestionPayload) {
     skipAuthRedirect: false,
   });
 }
-
-export type UpdateBankQuestionPayload = {
-  topicId?: string;
-  text?: string;
-  options?: string[];
-  correctIndex?: number;
-  acceptedAnswers?: string[];
-  feedback?: string | null;
-  isActive?: boolean;
-};
 
 export async function updateBankQuestion(
   id: string,
@@ -1705,3 +1696,121 @@ export async function uploadSessionSummary(
     fileName?: string;
   }>;
 }
+
+export async function submitInteraction(body: {
+  interactiveElementId: string;
+  scheduledSessionId: string;
+  response: Record<string, unknown>;
+}) {
+  return api<{
+    isCorrect: boolean;
+    scoreAwarded: number;
+    attemptNumber: number;
+  }>("/api/students/me/submissions", {
+    method: "POST",
+    body,
+    skipAuthRedirect: false,
+  });
+}
+
+export async function getStudentPresignedUploadUrl(
+  fileName: string,
+  contentType: string
+) {
+  return api<{ uploadUrl: string; publicUrl: string; key: string }>(
+    "/api/students/me/files/presigned-upload-url",
+    {
+      method: "POST",
+      body: { fileName, contentType },
+      skipAuthRedirect: false,
+    }
+  );
+}
+
+/** Presign → PUT R2 → returns publicUrl for submitInteraction file_upload */
+export async function uploadStudentFileToR2(file: File) {
+  const { uploadUrl, publicUrl, key } = await getStudentPresignedUploadUrl(
+    file.name,
+    file.type || "application/octet-stream"
+  );
+  const put = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  if (!put.ok) throw new Error("Upload to storage failed");
+  return { publicUrl, key, fileName: file.name };
+}
+
+
+// Create programme plan body — add duration
+export type CreateProgrammePlanPayload = {
+  programmeId: string;
+  weeks: number;
+  quizDay: "friday" | "saturday";
+  quizSize: number;
+  startDate: string; // Monday YYYY-MM-DD
+  requireCorrectAnswersToProgress?: boolean;
+  quizDurationMinutes?: number | null; // NEW — null/omit = untimed
+};
+
+export async function createStudentProgrammePlan(
+  studentId: string,
+  body: CreateProgrammePlanPayload
+) {
+  return api<CreateProgrammePlanResult>(
+    `/api/admin/students/${studentId}/learning-plan`,
+    {
+      method: "POST",
+      body,
+      skipAuthRedirect: false,
+    }
+  );
+}
+
+// Question bank — include imageUrl
+export type BankQuestion = {
+  id: string;
+  topicId: string;
+  topicTitle: string;
+  subjectId: string | null;
+  subjectTitle: string | null;
+  type: "multiple_choice" | "fill_blank";
+  text: string;
+  imageUrl?: string | null; // NEW
+  options: string[] | null;
+  correctIndex: number | null;
+  acceptedAnswers: string[] | null;
+  feedback: string | null;
+  isActive: boolean;
+};
+
+export type CreateBankQuestionPayload =
+  | {
+      type: "multiple_choice";
+      topicId: string;
+      text: string;
+      options: string[];
+      correctIndex: number;
+      feedback?: string;
+      imageUrl?: string | null;
+    }
+  | {
+      type: "fill_blank";
+      topicId: string;
+      text: string;
+      acceptedAnswers: string[];
+      feedback?: string;
+      imageUrl?: string | null;
+    };
+
+export type UpdateBankQuestionPayload = {
+  topicId?: string;
+  text?: string;
+  options?: string[];
+  correctIndex?: number;
+  acceptedAnswers?: string[];
+  feedback?: string | null;
+  isActive?: boolean;
+  imageUrl?: string | null; // NEW
+};

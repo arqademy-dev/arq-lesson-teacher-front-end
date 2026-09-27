@@ -56,6 +56,7 @@ export function QuestionFormModal({
   const [correct, setCorrect] = useState(0);
   const [acceptedAnswers, setAcceptedAnswers] = useState<string[]>([""]);
   const [feedback, setFeedback] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
 
   const topicsForSubject = topics.filter(
     (t) => !subjectId || t.subjectId === subjectId
@@ -78,6 +79,7 @@ export function QuestionFormModal({
           : [""]
       );
       setFeedback(question.feedback ?? "");
+      setImageUrl(question?.imageUrl ?? "");
     } else {
       setType("multiple_choice");
       setText("");
@@ -85,6 +87,7 @@ export function QuestionFormModal({
       setCorrect(0);
       setAcceptedAnswers([""]);
       setFeedback("");
+      setImageUrl("");
     }
   }, [open, defaultSubjectId, defaultTopicId, question]);
 
@@ -113,6 +116,7 @@ export function QuestionFormModal({
         options: cleaned.map((o) => o.text),
         correctIndex: correctIndex < 0 ? 0 : correctIndex,
         feedback: feedback.trim() || undefined,
+        imageUrl: imageUrl.trim() || undefined,
       };
       onSave({ mode: isEdit ? "edit" : "add", id: question?.id, body });
       return;
@@ -124,6 +128,7 @@ export function QuestionFormModal({
       text: text.trim(),
       acceptedAnswers: filledAnswers,
       feedback: feedback.trim() || undefined,
+      imageUrl: imageUrl.trim() || undefined,
     };
     onSave({ mode: isEdit ? "edit" : "add", id: question?.id, body });
   }
@@ -138,6 +143,7 @@ export function QuestionFormModal({
           <button onClick={onClose} className="btn ghost small" disabled={saving}>
             Cancel
           </button>
+          
           <button
             onClick={handleSave}
             disabled={!canSave || saving}
@@ -234,6 +240,26 @@ export function QuestionFormModal({
                 : "Type the question…"
             }
           />
+        </div>
+        <div>
+          <label className={labelClass}>Image URL (optional)</label>
+          <p className="text-[11px] text-[var(--ink-3)] mb-2">
+            Diagram/chart shown with the question. Paste a public URL, or upload via R2 and paste the public URL.
+          </p>
+          <input
+            className={fieldClass}
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            placeholder="https://…"
+          />
+          {imageUrl.trim() && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageUrl.trim()}
+              alt=""
+              className="mt-3 max-h-40 rounded-[var(--r-card)] border border-[var(--line)] object-contain"
+            />
+          )}
         </div>
 
         {type === "multiple_choice" && (

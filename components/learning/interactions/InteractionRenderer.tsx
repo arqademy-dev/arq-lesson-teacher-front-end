@@ -83,10 +83,12 @@ export function InteractionRenderer({
 
       {type === "fill_blank" && (
         <FillBlank
-          config={cfg as FillBlankConfig}
+          config={cfg as { prompt_text?: string }}
           disabled={locked}
           initialAnswer={
-            (initialAnswer as FillBlankAnswer | null) ?? null
+            initialAnswer && typeof (initialAnswer as { answer?: string }).answer === "string"
+              ? { answer: (initialAnswer as { answer: string }).answer }
+              : null
           }
           onReady={setAnswer}
         />

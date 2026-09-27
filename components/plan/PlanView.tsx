@@ -73,6 +73,14 @@ export function PlanView({
               plan.quizSize != null ? `${plan.quizSize} questions` : "—"
             }
           />
+          <Chip
+              label="Quiz time"
+              value={
+                plan.quizDurationMinutes != null
+                  ? `${plan.quizDurationMinutes} min`
+                  : "Untimed"
+              }
+            />
         </div>
 
         {(paymentId || amountNaira != null) && (

@@ -43,6 +43,16 @@ export function QuestionCard({ question, number, onEdit, onDelete }: Props) {
             <div className="font-semibold text-[var(--ink)] leading-snug whitespace-pre-wrap">
               {question.text}
             </div>
+            <div>
+              {question.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={question.imageUrl}
+                alt=""
+                className="mt-3 max-h-48 rounded-[var(--r-card)] border border-[var(--line)] object-contain"
+              />
+            )}
+            </div>
           </div>
         </div>
 
