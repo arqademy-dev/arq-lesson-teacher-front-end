@@ -280,17 +280,17 @@ export type StudentPayment = {
 };
 
 /** Create invoice — price computed server-side from topic count */
-export async function initiateStudentPayment(learningPlanId: string) {
-  return api<{
-    message?: string;
-    payment?: StudentPayment;
-    redirectUrl?: string | null;
-  }>("/api/students/payments/initiate", {
-    method: "POST",
-    body: { learningPlanId },
-    skipAuthRedirect: false,
-  });
-}
+// export async function initiateStudentPayment(learningPlanId: string) {
+//   return api<{
+//     message?: string;
+//     payment?: StudentPayment;
+//     redirectUrl?: string | null;
+//   }>("/api/students/payments/initiate", {
+//     method: "POST",
+//     body: { learningPlanId },
+//     skipAuthRedirect: false,
+//   });
+// }
 
 export async function listStudentPayments() {
   return api<StudentPayment[]>("/api/students/payments/me", {
@@ -1655,47 +1655,57 @@ export async function getQuestionCoverage(programmeId: string) {
   );
 }
 /** Daily summary upload for a scheduled learning day */
+// export async function uploadSessionSummary(
+//   scheduledSessionId: string,
+//   file: File
+// ) {
+//   const API_BASE =
+//     process.env.NEXT_PUBLIC_API_BASE_URL ??
+//     (typeof window !== "undefined"
+//       ? "/backend"
+//       : "https://arq-lesson-teacher-back-end.onrender.com");
+
+//   const form = new FormData();
+//   form.append("file", file);
+//   form.append("scheduledSessionId", scheduledSessionId);
+//   // form.append("kind", "summary"); // if your API expects it
+
+//   const res = await fetch(
+//     `${API_BASE}/api/students/me/sessions/${scheduledSessionId}/summary`,
+//     {
+//       method: "POST",
+//       credentials: "include",
+//       body: form,
+//       // do NOT set Content-Type — browser sets multipart boundary
+//     }
+//   );
+
+//   if (!res.ok) {
+//     let message = res.statusText;
+//     try {
+//       const body = await res.json();
+//       message = (body as { message?: string }).message || message;
+//     } catch {
+//       /* ignore */
+//     }
+//     throw new ApiError(res.status, message);
+//   }
+//   return res.json() as Promise<{
+//     id?: string;
+//     url?: string;
+//     fileName?: string;
+//   }>;
+// }
+
 export async function uploadSessionSummary(
-  scheduledSessionId: string,
+  learningPlanId: string,
+  scheduledDate: string, // YYYY-MM-DD — session.scheduledDate
   file: File
 ) {
-  const API_BASE =
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    (typeof window !== "undefined"
-      ? "/backend"
-      : "https://arq-lesson-teacher-back-end.onrender.com");
-
-  const form = new FormData();
-  form.append("file", file);
-  form.append("scheduledSessionId", scheduledSessionId);
-  // form.append("kind", "summary"); // if your API expects it
-
-  const res = await fetch(
-    `${API_BASE}/api/students/me/sessions/${scheduledSessionId}/summary`,
-    {
-      method: "POST",
-      credentials: "include",
-      body: form,
-      // do NOT set Content-Type — browser sets multipart boundary
-    }
-  );
-
-  if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const body = await res.json();
-      message = (body as { message?: string }).message || message;
-    } catch {
-      /* ignore */
-    }
-    throw new ApiError(res.status, message);
-  }
-  return res.json() as Promise<{
-    id?: string;
-    url?: string;
-    fileName?: string;
-  }>;
+  return uploadAndAttachDailySubmissionFile(learningPlanId, scheduledDate, file);
 }
+ 
+
 
 export async function submitInteraction(body: {
   interactiveElementId: string;
@@ -1814,3 +1824,313 @@ export type UpdateBankQuestionPayload = {
   isActive?: boolean;
   imageUrl?: string | null; // NEW
 };
+
+
+/* ============================================================
+   STUDENT — Weekly quizzes
+   Paste into lib/api.ts
+   ============================================================ */
+
+export type MyWeeklyQuiz = {
+  id: string;
+  weekNumber: number;
+  scheduledDate: string; // YYYY-MM-DD
+  status: "pending" | "submitted";
+  requestedSize: number;
+  score: number | null;
+  submittedAt: string | null;
+  totalQuestions: number;
+};
+
+export type WeeklyQuizQuestion = {
+  id: string;
+  orderIndex: number;
+  type: "multiple_choice" | "fill_blank";
+  text: string;
+  imageUrl?: string | null;
+  options: string[] | null;
+  myAnswer: { selectedIndex?: number | null; answerText?: string | null } | null;
+  // Only present once the quiz is submitted:
+  correctIndex?: number | null;
+  acceptedAnswers?: string[] | null;
+  feedback?: string | null;
+  isCorrect?: boolean;
+  scoreAwarded?: number;
+};
+
+export type WeeklyQuizDetail = {
+  id: string;
+  learningPlanId: string;
+  weekNumber: number;
+  scheduledDate: string;
+  status: "pending" | "submitted";
+  score: number | null;
+  submittedAt: string | null;
+  // Only present if the duration/timer patch was applied on the backend:
+  durationMinutes?: number | null;
+  startedAt?: string | null;
+  expiresAt?: string | null;
+  questions: WeeklyQuizQuestion[];
+};
+
+/** History: every week's quiz, status and score */
+export async function listMyWeeklyQuizzes(learningPlanId: string) {
+  return api<MyWeeklyQuiz[]>(`/api/students/me/quizzes/plan/${learningPlanId}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+/** Not submitted: questions only. Submitted: answers + feedback revealed. */
+export async function getMyWeeklyQuiz(weeklyQuizId: string) {
+  return api<WeeklyQuizDetail>(`/api/students/me/quizzes/${weeklyQuizId}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+export async function saveWeeklyQuizAnswer(
+  weeklyQuizId: string,
+  questionId: string,
+  answer: { selectedIndex?: number; answerText?: string }
+) {
+  // send ONE key only: selectedIndex (multiple choice) or answerText (fill blank)
+  const body =
+    answer.selectedIndex !== undefined
+      ? { selectedIndex: answer.selectedIndex }
+      : { answerText: answer.answerText ?? "" };
+  return api<{ saved: boolean }>(
+    `/api/students/me/quizzes/${weeklyQuizId}/answers/${questionId}`,
+    { method: "PUT", body, skipAuthRedirect: false }
+  );
+}
+
+/** Grades everything at once and returns the revealed detail */
+export async function submitWeeklyQuiz(weeklyQuizId: string) {
+  return api<WeeklyQuizDetail>(`/api/students/me/quizzes/${weeklyQuizId}/submit`, {
+    method: "POST",
+    skipAuthRedirect: false,
+  });
+}
+
+/* ============================================================
+   STUDENT — Daily summary note + files
+   ============================================================ */
+
+export type DailySubmissionTopic = {
+  learningPlanTopicId: string;
+  topicId: string;
+  title: string;
+  subjectTitle: string | null;
+  summaryFormat: { header: string; body: string }[] | null;
+};
+
+export type DailySubmissionFile = {
+  id: string;
+  fileUrl: string;
+  fileKey: string | null;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+};
+
+export type DailySubmissionDay = {
+  id: string | null; // null until the student first saves something
+  learningPlanId: string;
+  forDate: string; // YYYY-MM-DD
+  status: "not_started" | "draft" | "submitted";
+  summaryNote: string | null;
+  submittedAt: string | null;
+  topics: DailySubmissionTopic[];
+  files: DailySubmissionFile[];
+};
+
+export type ListDailySubmissionsQuery = {
+  learningPlanId?: string;
+  topicId?: string;
+  from?: string; // YYYY-MM-DD
+  to?: string;
+};
+
+function dailySubmissionsQuery(q: ListDailySubmissionsQuery = {}): string {
+  const p = new URLSearchParams();
+  if (q.learningPlanId) p.set("learningPlanId", q.learningPlanId);
+  if (q.topicId) p.set("topicId", q.topicId);
+  if (q.from) p.set("from", q.from);
+  if (q.to) p.set("to", q.to);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+export async function listDailySubmissions(query: ListDailySubmissionsQuery = {}) {
+  return api<DailySubmissionDay[]>(
+    `/api/students/me/daily-submissions${dailySubmissionsQuery(query)}`,
+    { skipAuthRedirect: false }
+  );
+}
+
+export async function getDailySubmission(learningPlanId: string, date: string) {
+  return api<DailySubmissionDay>(
+    `/api/students/me/daily-submissions/${learningPlanId}/${date}`,
+    { skipAuthRedirect: false }
+  );
+}
+
+export async function saveDailySummaryNote(
+  learningPlanId: string,
+  date: string,
+  summaryNote: string
+) {
+  return api<DailySubmissionDay>(
+    `/api/students/me/daily-submissions/${learningPlanId}/${date}`,
+    { method: "PUT", body: { summaryNote }, skipAuthRedirect: false }
+  );
+}
+
+// Attach files already uploaded via your existing presigned-upload endpoints
+// (getStudentPresignedUploadUrl / getStudentBatchPresignedUploadUrls). This
+// only records the resulting URL against the day — it does not upload anything itself.
+export async function addDailySubmissionFiles(
+  learningPlanId: string,
+  date: string,
+  files: Array<{
+    fileUrl: string;
+    fileKey?: string;
+    fileName: string;
+    contentType?: string;
+    sizeBytes?: number;
+  }>
+) {
+  return api<DailySubmissionDay>(
+    `/api/students/me/daily-submissions/${learningPlanId}/${date}/files`,
+    { method: "POST", body: { files }, skipAuthRedirect: false }
+  );
+}
+
+export async function removeDailySubmissionFile(
+  learningPlanId: string,
+  date: string,
+  fileId: string
+) {
+  return api<DailySubmissionDay>(
+    `/api/students/me/daily-submissions/${learningPlanId}/${date}/files/${fileId}`,
+    { method: "DELETE", skipAuthRedirect: false }
+  );
+}
+
+export async function submitDailySubmission(learningPlanId: string, date: string) {
+  return api<DailySubmissionDay>(
+    `/api/students/me/daily-submissions/${learningPlanId}/${date}/submit`,
+    { method: "POST", skipAuthRedirect: false }
+  );
+}
+
+// Convenience: upload a real File object end-to-end using your existing
+// presign flow, then attach it to the day in one call.
+export async function uploadAndAttachDailySubmissionFile(
+  learningPlanId: string,
+  date: string,
+  file: File
+) {
+  const { uploadUrl, publicUrl, key } = await getStudentPresignedUploadUrl(
+    file.name,
+    file.type || "application/octet-stream"
+  );
+
+  const put = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  if (!put.ok) throw new Error("Failed to upload file to storage");
+
+  return addDailySubmissionFiles(learningPlanId, date, [
+    {
+      fileUrl: publicUrl,
+      fileKey: key,
+      fileName: file.name,
+      contentType: file.type || "application/octet-stream",
+      sizeBytes: file.size,
+    },
+  ]);
+}
+
+/* ============================================================
+   EDUCATOR / ADMIN — Daily submissions (read + reopen)
+   ============================================================ */
+
+export async function listEducatorStudentDailySubmissions(
+  studentId: string,
+  query: ListDailySubmissionsQuery = {}
+) {
+  return api<DailySubmissionDay[]>(
+    `/api/educators/students/${studentId}/daily-submissions${dailySubmissionsQuery(query)}`,
+    { skipAuthRedirect: false }
+  );
+}
+
+export async function reopenStudentDailySubmission(
+  studentId: string,
+  submissionId: string
+) {
+  return api<DailySubmissionDay>(
+    `/api/educators/students/${studentId}/daily-submissions/${submissionId}/reopen`,
+    { method: "POST", skipAuthRedirect: false }
+  );
+}
+
+export async function listAdminStudentDailySubmissions(
+  studentId: string,
+  query: ListDailySubmissionsQuery = {}
+) {
+  return api<DailySubmissionDay[]>(
+    `/api/admin/students/${studentId}/daily-submissions${dailySubmissionsQuery(query)}`,
+    { skipAuthRedirect: false }
+  );
+}
+
+export async function reopenAdminStudentDailySubmission(
+  studentId: string,
+  submissionId: string
+) {
+  return api<DailySubmissionDay>(
+    `/api/admin/students/${studentId}/daily-submissions/${submissionId}/reopen`,
+    { method: "POST", skipAuthRedirect: false }
+  );
+}
+
+
+/* ============================================================
+   Additions to lib/api.ts for the GafiaPay temporal-account flow.
+   ============================================================ */
+
+export type VirtualAccount = {
+  accountNumber: string;
+  accountName?: string;
+  bankName?: string;
+  expiresAt?: string; // ISO datetime
+};
+
+/** Create invoice — price computed server-side from topic count.
+ *  Replaces the existing initiateStudentPayment in lib/api.ts (same name,
+ *  wider return type — nothing else about the call changes). */
+export async function initiateStudentPayment(learningPlanId: string) {
+  return api<{
+    message?: string;
+    paymentId?: string;
+    payment?: StudentPayment;
+    redirectUrl?: string | null;
+    virtualAccount?: VirtualAccount;
+  }>("/api/students/payments/initiate", {
+    method: "POST",
+    body: { learningPlanId },
+    skipAuthRedirect: false,
+  });
+}
+
+/** Cheap polling target — status only, no full row. */
+export async function getStudentPaymentStatus(paymentId: string) {
+  return api<{ status: "pending" | "success" | "failed" | "refunded"; paidAt: string | null }>(
+    `/api/students/payments/${paymentId}/status`,
+    { skipAuthRedirect: false }
+  );
+}

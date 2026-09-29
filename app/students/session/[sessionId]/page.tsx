@@ -32,6 +32,7 @@ import {
   FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SummaryFormatButton } from "@/components/learning/SummaryFormatButton";
 
 type SummarySection = { header: string; body: string };
 
@@ -232,7 +233,8 @@ async function handleSubmit(elementId: string, payload: InteractionAnswer) {
     setUploading(true);
     setUploadError(null);
     try {
-      await uploadSessionSummary(data.session.id, file);
+      // await uploadSessionSummary(data.session.id, file);
+      await uploadSessionSummary(data.learningPlanId, data.session.scheduledDate, file);
       setSummaryUploaded(true);
       setSummaryFileName(file.name);
     } catch (err) {
@@ -496,34 +498,7 @@ async function handleSubmit(elementId: string, payload: InteractionAnswer) {
 
             {/* Summary guide (topic.summaryFormat) */}
             {summaryFormat.length > 0 && (
-              <section className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)]">
-                <div className="flex items-center gap-2 mb-3">
-                  <FileText className="w-4 h-4 text-[var(--brand)]" />
-                  <h2 className="font-heading text-[15px] font-semibold text-[var(--ink)]">
-                    Summary guide
-                  </h2>
-                </div>
-                <p className="text-[12.5px] text-[var(--ink-3)] mb-4">
-                  Use this outline when writing today&apos;s summary note.
-                </p>
-                <ul className="space-y-3">
-                  {summaryFormat.map((sec, i) => (
-                    <li
-                      key={i}
-                      className="rounded-[10px] border border-[var(--line-soft)] bg-[var(--surface-2)] px-4 py-3"
-                    >
-                      <div className="text-[13px] font-bold text-[var(--ink)]">
-                        {sec.header}
-                      </div>
-                      {sec.body && (
-                        <p className="mt-1 text-[12.5px] text-[var(--ink-3)] leading-relaxed">
-                          {sec.body}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </section>
+              <SummaryFormatButton sections={summaryFormat} />
             )}
 
             {/* Required daily file upload — not on review; quiz days use quiz UI */}
