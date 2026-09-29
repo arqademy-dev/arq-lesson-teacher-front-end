@@ -11,6 +11,8 @@ import {
   ApiError,
   type LearningPlanBreakdownPlan,
   type StudentPayment,
+  listMyWeeklyQuizzes,
+  type MyWeeklyQuiz,
 } from "@/lib/api";
 import {
   ArrowLeft,
@@ -33,6 +35,8 @@ type StudentMe = {
   enrollmentDate?: string;
   [key: string]: unknown;
 };
+
+
 
 type PlanPaymentState = {
   status: "success" | "pending" | "none";
@@ -64,7 +68,6 @@ type WeekGroup = {
 };
 
 const DAY_MS = 86_400_000;
-
 /**
  * The breakdown endpoint returns one entry per TOPIC, not per week. A "week"
  * is a calendar week counted from the plan's startDate (always a Monday), so
@@ -164,6 +167,8 @@ export default function StudentLearningPlanPage() {
   const [initiating, setInitiating] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
+  const [quizzes, setQuizzes] = useState<MyWeeklyQuiz[]>([]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -211,6 +216,14 @@ export default function StudentLearningPlanPage() {
     if (pending) return { status: "pending", payment: pending };
     return { status: "none", payment: null };
   }, [payments, activePlan]);
+
+    useEffect(() => {
+      if (!activePlan) return;
+      listMyWeeklyQuizzes(activePlan.planId)
+        .then((q) => setQuizzes(Array.isArray(q) ? q : []))
+        .catch(() => setQuizzes([]));
+        
+    }, [activePlan?.planId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openWeekPopup(week: number) {
     setOpenWeekNo(week);
@@ -625,7 +638,45 @@ export default function StudentLearningPlanPage() {
                           </div>
                         ))}
                       </div>
-
+                        {(() => {
+                          const quiz = quizzes.find((q) => q.weekNumber === openWeek.week);
+                          if (!quiz) return null;
+                          const submitted = quiz.status === "submitted";
+                          const open = submitted || openWeek.isDone;
+                          return (
+                            <div className="flex-none px-4 pb-3">
+                              <div
+                                className={cn(
+                                  "flex items-center gap-3 rounded-[12px] border px-4 py-3",
+                                  open ? "border-[var(--brand)] bg-[var(--brand-soft)]" : "border-[var(--line-soft)] bg-[var(--surface)]"
+                                )}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[13px] font-bold text-[var(--ink)]">Week {quiz.weekNumber} quiz</p>
+                                  <p className="text-[11px] font-semibold text-[var(--ink-3)]">
+                                    {longDate(quiz.scheduledDate)} · {quiz.totalQuestions} questions
+                                    {submitted && quiz.score != null && ` · Score ${quiz.score}/${quiz.totalQuestions}`}
+                                  </p>
+                                </div>
+                                {open ? (
+                                  <Link
+                                    href={`/students/quiz/${quiz.id}`}
+                                    onClick={closeWeek}
+                                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[11.5px] font-bold bg-[var(--brand)] text-white flex-none"
+                                  >
+                                    {submitted ? "Review" : "Start"}
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                  </Link>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--ink-4)] flex-none">
+                                    <Lock className="w-3.5 h-3.5" />
+                                    Locked
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       <div className="flex-none px-4 py-3 border-t border-[var(--line-soft)]">
                         <button
                           type="button"
