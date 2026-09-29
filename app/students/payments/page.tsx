@@ -79,8 +79,6 @@ export default function StudentPaymentsPage() {
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  setAmountNaira(session.amountNaira ?? null);
-
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
