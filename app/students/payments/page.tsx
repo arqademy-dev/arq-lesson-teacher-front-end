@@ -35,7 +35,7 @@ type PaymentRow = {
 
 const STORAGE_KEY = "arqademy_pending_payment";
 
-type PendingSession = { paymentId: string; account: VirtualAccount; expiresAtMs: number };
+type PendingSession = { paymentId: string; account: VirtualAccount; expiresAtMs: number; amountNaira?: number };
 
 function saveSession(session: PendingSession) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
@@ -75,8 +75,11 @@ export default function StudentPaymentsPage() {
   const [checking, setChecking] = useState(false);
   const [copied, setCopied] = useState(false);
   const [paidJustNow, setPaidJustNow] = useState(false);
+  const [amountNaira, setAmountNaira] = useState<number | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  setAmountNaira(session.amountNaira ?? null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,6 +131,7 @@ export default function StudentPaymentsPage() {
       setPaymentId(session.paymentId);
       setTimeLeft(Math.max(0, Math.floor((session.expiresAtMs - Date.now()) / 1000)));
       setShowModal(true);
+      setAmountNaira(session.amountNaira ?? null);
     }
   }, []);
 
@@ -210,8 +214,10 @@ export default function StudentPaymentsPage() {
         setAccount(res.virtualAccount);
         setPaymentId(res.paymentId);
         setTimeLeft(Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000)));
-        setShowModal(true);
-        saveSession({ paymentId: res.paymentId, account: res.virtualAccount, expiresAtMs });
+        setShowModal(true);const amt = res.payment?.amountNaira ?? null;
+        setAmountNaira(amt);
+        saveSession({ paymentId: res.paymentId, account: res.virtualAccount, expiresAtMs, amountNaira: amt ?? undefined });
+      
       } else {
         setMessage(res.message || "Payment record already exists for this plan.");
       }
@@ -403,6 +409,12 @@ export default function StudentPaymentsPage() {
             <h3 className="font-heading text-[19px] text-[var(--ink)] mb-6">Pay into this account</h3>
 
             <div className="space-y-5">
+              {amountNaira != null && (
+                <div className="rounded-[12px] bg-[var(--surface-2)] p-4">
+                  <p className="text-[10px] font-bold tracking-[0.12em] uppercase text-[var(--ink-3)] mb-1">Amount to transfer</p>
+                  <p className="text-[24px] font-bold text-[var(--ink)] tabular-nums">₦{amountNaira.toLocaleString()}</p>
+                </div>
+              )}
               <div className="rounded-[12px] bg-[var(--surface-2)] p-4">
                 <p className="text-[10px] font-bold tracking-[0.12em] uppercase text-[var(--ink-3)] mb-1">Account Number</p>
                 <div className="flex items-center justify-between gap-3">
