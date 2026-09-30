@@ -525,10 +525,15 @@ export default function StudentLearningPlanPage() {
                       </div>
 
                       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-                        {openWeek.days.map((day) => (
+                        {openWeek.days.map((day, dayIdx) => (
                           <div key={day.date}>
+                            {/* Full date, commented out for a quieter header — swap back in if needed:
                             <p className="text-[10.5px] font-bold tracking-[0.1em] uppercase text-[var(--ink-3)] mb-1.5 px-1">
                               {longDate(day.date)}
+                            </p>
+                            */}
+                            <p className="text-[10.5px] font-bold tracking-[0.1em] uppercase text-[var(--ink-3)] mb-1.5 px-1">
+                              Day {dayIdx + 1}
                             </p>
                             <div className="space-y-2">
                               {day.sessions.map((s) => {
@@ -617,24 +622,17 @@ export default function StudentLearningPlanPage() {
                                     </div>
 
                                     {isDone && actionsOpen && (
-                                      <div className="mt-2.5 pt-2.5 border-t border-[var(--line-soft)] grid grid-cols-2 gap-2">
+                                      <div className="mt-2.5 pt-2.5 border-t border-[var(--line-soft)]">
                                         <button
                                           type="button"
                                           onClick={() => {
                                             closeWeek();
                                             router.push(`/students/session/${s.id}`);
                                           }}
-                                          className="h-9 rounded-[9px] text-[12px] font-bold text-[var(--ink-2)] bg-[var(--surface-3)] hover:bg-[var(--surface-2)] transition"
+                                          className="w-full h-9 rounded-[9px] text-[12px] font-bold text-[var(--ink-2)] bg-[var(--surface-3)] hover:bg-[var(--surface-2)] transition"
                                         >
                                           Review
                                         </button>
-                                        <Link
-                                          href={`/students/feedback/${s.id}`}
-                                          onClick={closeWeek}
-                                          className="flex items-center justify-center h-9 rounded-[9px] text-[12px] font-bold text-[var(--brand)] bg-[var(--brand-soft)] hover:opacity-90 transition"
-                                        >
-                                          View AI Feedback
-                                        </Link>
                                       </div>
                                     )}
                                   </div>
