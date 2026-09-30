@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  getStudentMe,
   getMyLearningPlanBreakdown,
   listStudentPayments,
   initiateStudentPayment,
@@ -25,18 +24,6 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-type StudentMe = {
-  firstName?: string;
-  lastName?: string;
-  arqId?: string;
-  academicLevel?: string | null;
-  class?: { id: string; title: string; term?: string | null } | null;
-  enrollmentDate?: string;
-  [key: string]: unknown;
-};
-
-
 
 type PlanPaymentState = {
   status: "success" | "pending" | "none";
@@ -77,9 +64,6 @@ const DAY_MS = 86_400_000;
 function buildWeeks(plan: LearningPlanBreakdownPlan): WeekGroup[] {
   const startMs = Date.parse(`${plan.startDate}T00:00:00Z`);
 
-  // Flatten in topic (sequence) order first — the first unfinished session in
-  // that order is the one the student is actually on, same as the backend's
-  // getCurrentSession, which walks topics strictly in sequence.
   const flat = plan.topics.flatMap((t) =>
     [...t.done, ...t.todo].map((s) => ({
       id: s.id,
@@ -108,7 +92,7 @@ function buildWeeks(plan: LearningPlanBreakdownPlan): WeekGroup[] {
     .map((week) => {
       const sessions = byWeek
         .get(week)!
-        .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate)); // stable: keeps topic order within a date
+        .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
 
       const dayMap = new Map<string, PlanSession[]>();
       for (const s of sessions) {
@@ -151,17 +135,52 @@ function shortDate(date: string) {
   });
 }
 
+/* ── Skeleton loader ─────────────────────────────────────── */
+function WeekCardSkeleton() {
+  return (
+    <div className="rounded-[16px] border border-[var(--line-soft)] bg-[var(--surface)] p-5 min-h-[112px] flex flex-col justify-between animate-pulse">
+      <div className="space-y-2">
+        <div className="h-2.5 w-10 rounded-full bg-[var(--surface-3)]" />
+        <div className="h-6 w-8 rounded-md bg-[var(--surface-3)]" />
+      </div>
+      <div className="space-y-1.5">
+        <div className="h-3 w-20 rounded-full bg-[var(--surface-3)]" />
+        <div className="h-2.5 w-24 rounded-full bg-[var(--surface-3)]" />
+      </div>
+    </div>
+  );
+}
+
+function LearningPlanSkeleton() {
+  return (
+    <div className="mt-6" aria-hidden="true">
+      <div className="flex items-center justify-between gap-3 mb-5">
+        <div className="space-y-2">
+          <div className="h-2.5 w-20 rounded-full bg-[var(--surface-3)] animate-pulse" />
+          <div className="h-3 w-40 rounded-full bg-[var(--surface-3)] animate-pulse" />
+        </div>
+      </div>
+      <div className="mb-6 space-y-1.5">
+        <div className="h-2.5 w-24 rounded-full bg-[var(--surface-3)] animate-pulse" />
+        <div className="h-1.5 rounded-full bg-[var(--surface-3)] animate-pulse" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <WeekCardSkeleton key={i} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function StudentLearningPlanPage() {
   const router = useRouter();
-  const [me, setMe] = useState<StudentMe | null>(null);
   const [plans, setPlans] = useState<LearningPlanBreakdownPlan[]>([]);
   const [payments, setPayments] = useState<StudentPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Which week's popup is open (null = none).
   const [openWeekNo, setOpenWeekNo] = useState<number | null>(null);
-  // Which completed session's action row (Review / AI Feedback) is open.
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
 
   const [initiating, setInitiating] = useState(false);
@@ -172,12 +191,10 @@ export default function StudentLearningPlanPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [profile, breakdown, pays] = await Promise.all([
-          getStudentMe().catch(() => null),
+        const [breakdown, pays] = await Promise.all([
           getMyLearningPlanBreakdown(),
           listStudentPayments().catch(() => []),
         ]);
-        if (profile) setMe(profile as StudentMe);
         setPlans(Array.isArray(breakdown) ? breakdown : []);
         setPayments(Array.isArray(pays) ? pays : []);
       } catch (err) {
@@ -217,13 +234,12 @@ export default function StudentLearningPlanPage() {
     return { status: "none", payment: null };
   }, [payments, activePlan]);
 
-    useEffect(() => {
-      if (!activePlan) return;
-      listMyWeeklyQuizzes(activePlan.planId)
-        .then((q) => setQuizzes(Array.isArray(q) ? q : []))
-        .catch(() => setQuizzes([]));
-        
-    }, [activePlan?.planId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!activePlan) return;
+    listMyWeeklyQuizzes(activePlan.planId)
+      .then((q) => setQuizzes(Array.isArray(q) ? q : []))
+      .catch(() => setQuizzes([]));
+  }, [activePlan?.planId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openWeekPopup(week: number) {
     setOpenWeekNo(week);
@@ -257,11 +273,6 @@ export default function StudentLearningPlanPage() {
     }
   }
 
-  const fullName =
-    me && (me.firstName || me.lastName)
-      ? `${me.firstName ?? ""} ${me.lastName ?? ""}`.trim()
-      : null;
-
   return (
     <div className="relative min-h-screen">
       <div className="bg-grid" />
@@ -281,19 +292,9 @@ export default function StudentLearningPlanPage() {
       </header>
 
       <main className="relative z-10 max-w-3xl mx-auto px-6 py-8">
-        <p className="text-[9.5px] font-bold tracking-[0.18em] uppercase text-[var(--brand)] mb-2">
-          Continue learning
-        </p>
-        <h1 className="font-heading text-[22px] text-[var(--ink)]">
-          {fullName ? `${fullName}'s plan` : "Your learning plan"}
-        </h1>
+        <h1 className="font-heading text-[22px] text-[var(--ink)]">Learning plan</h1>
 
-        {loading && (
-          <div className="mt-10 flex items-center gap-2 text-[var(--ink-3)] text-[13px]">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Loading your plan…
-          </div>
-        )}
+        {loading && <LearningPlanSkeleton />}
 
         {error && (
           <div className="mt-8 space-y-3 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-5">
@@ -378,12 +379,12 @@ export default function StudentLearningPlanPage() {
             ) : (
               /* ── Real calendar weeks grid + popup ── */
               <section className="mt-6">
-                <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
                   <div>
                     <p className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
                       Study plan
                     </p>
-                    <p className="text-[12px] text-[var(--ink-3)] font-semibold mt-0.5">
+                    <p className="text-[12px] text-[var(--ink-3)] font-medium mt-0.5">
                       {weeks.length} week{weeks.length === 1 ? "" : "s"} ·{" "}
                       {activePlan.topics.length} topics · {completedWeeks} week
                       {completedWeeks === 1 ? "" : "s"} completed
@@ -395,7 +396,7 @@ export default function StudentLearningPlanPage() {
                 </div>
 
                 {/* Progress bar */}
-                <div className="mb-5">
+                <div className="mb-6">
                   <div className="flex justify-between text-[11px] font-bold text-[var(--ink-3)] mb-1.5">
                     <span>
                       Week {currentWeekIdx >= 0 ? weeks[currentWeekIdx].week : "—"} of{" "}
@@ -411,20 +412,22 @@ export default function StudentLearningPlanPage() {
                   </div>
                 </div>
 
-                {/* Week cards */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* Week cards — 1 column on small screens, 2 from sm up */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {weeks.map((w) => (
                     <button
                       key={w.week}
                       type="button"
                       onClick={() => openWeekPopup(w.week)}
                       className={cn(
-                        "rounded-[14px] border text-left p-4 min-h-[100px] flex flex-col justify-between transition-colors",
+                        "rounded-[16px] border text-left p-5 min-h-[112px] flex flex-col justify-between transition-colors",
+                        // Done: darker brand-ink (not brand) so white text keeps solid contrast
                         w.isDone &&
-                          "bg-[var(--brand)] border-[var(--brand)] text-white shadow-sm",
+                          "bg-[var(--brand-ink)] border-[var(--brand-ink)] text-white shadow-sm",
                         w.isCurrent &&
                           "bg-[color-mix(in_srgb,var(--brand)_12%,var(--surface))] border-[var(--brand)] shadow-sm",
-                        w.isFuture && "bg-[var(--surface)] border-[var(--line-soft)] opacity-70"
+                        w.isFuture &&
+                          "bg-[var(--surface)] border-[var(--line-soft)]"
                       )}
                     >
                       <div className="flex items-start justify-between gap-2 w-full">
@@ -432,14 +435,14 @@ export default function StudentLearningPlanPage() {
                           <p
                             className={cn(
                               "text-[10px] font-bold tracking-[0.14em] uppercase",
-                              w.isDone ? "text-white/80" : "text-[var(--ink-3)]"
+                              w.isDone ? "text-white/90" : "text-[var(--ink-3)]"
                             )}
                           >
                             Week
                           </p>
                           <p
                             className={cn(
-                              "font-heading text-[22px] font-semibold leading-none mt-1",
+                              "font-heading text-[24px] font-semibold leading-none mt-1.5",
                               w.isDone ? "text-white" : "text-[var(--ink)]"
                             )}
                           >
@@ -447,17 +450,21 @@ export default function StudentLearningPlanPage() {
                           </p>
                         </div>
                         {w.isDone && (
-                          <span className="w-6 h-6 rounded-full bg-white/20 grid place-items-center flex-none">
+                          <span className="w-7 h-7 rounded-full bg-white/15 grid place-items-center flex-none">
                             <CheckCircle2 className="w-4 h-4 text-white" />
                           </span>
                         )}
                       </div>
 
-                      <div className="mt-3 w-full">
+                      <div className="mt-4 w-full">
                         <p
                           className={cn(
-                            "text-[12px] font-bold truncate",
-                            w.isDone ? "text-white" : "text-[var(--ink)]"
+                            "text-[12.5px] font-semibold truncate",
+                            w.isDone
+                              ? "text-white"
+                              : w.isFuture
+                                ? "text-[var(--ink-4)]"
+                                : "text-[var(--ink)]"
                           )}
                         >
                           {w.isDone
@@ -468,8 +475,8 @@ export default function StudentLearningPlanPage() {
                         </p>
                         <p
                           className={cn(
-                            "text-[10.5px] font-semibold mt-0.5 truncate",
-                            w.isDone ? "text-white/75" : "text-[var(--ink-3)]"
+                            "text-[11px] font-medium mt-1 truncate",
+                            w.isDone ? "text-white/90" : "text-[var(--ink-3)]"
                           )}
                         >
                           {shortDate(w.firstDate)} – {shortDate(w.lastDate)}
@@ -517,7 +524,6 @@ export default function StudentLearningPlanPage() {
                         </button>
                       </div>
 
-                      {/* Days, each holding one or more topics */}
                       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
                         {openWeek.days.map((day) => (
                           <div key={day.date}>
@@ -559,7 +565,7 @@ export default function StudentLearningPlanPage() {
                                         )}
                                       </span>
 
-                                      <p className="min-w-0 flex-1 text-[13px] font-bold text-[var(--ink)] leading-snug">
+                                      <p className="min-w-0 flex-1 text-[13px] font-semibold text-[var(--ink)] leading-snug">
                                         {s.topicTitle}
                                       </p>
 
@@ -638,45 +644,51 @@ export default function StudentLearningPlanPage() {
                           </div>
                         ))}
                       </div>
-                        {(() => {
-                          const quiz = quizzes.find((q) => q.weekNumber === openWeek.week);
-                          if (!quiz) return null;
-                          const submitted = quiz.status === "submitted";
-                          const open = submitted || openWeek.isDone;
-                          return (
-                            <div className="flex-none px-4 pb-3">
-                              <div
-                                className={cn(
-                                  "flex items-center gap-3 rounded-[12px] border px-4 py-3",
-                                  open ? "border-[var(--brand)] bg-[var(--brand-soft)]" : "border-[var(--line-soft)] bg-[var(--surface)]"
-                                )}
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[13px] font-bold text-[var(--ink)]">Week {quiz.weekNumber} quiz</p>
-                                  <p className="text-[11px] font-semibold text-[var(--ink-3)]">
-                                    {longDate(quiz.scheduledDate)} · {quiz.totalQuestions} questions
-                                    {submitted && quiz.score != null && ` · Score ${quiz.score}/${quiz.totalQuestions}`}
-                                  </p>
-                                </div>
-                                {open ? (
-                                  <Link
-                                    href={`/students/quiz/${quiz.id}`}
-                                    onClick={closeWeek}
-                                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[11.5px] font-bold bg-[var(--brand)] text-white flex-none"
-                                  >
-                                    {submitted ? "Review" : "Start"}
-                                    <ArrowRight className="w-3.5 h-3.5" />
-                                  </Link>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--ink-4)] flex-none">
-                                    <Lock className="w-3.5 h-3.5" />
-                                    Locked
-                                  </span>
-                                )}
+                      {(() => {
+                        const quiz = quizzes.find((q) => q.weekNumber === openWeek.week);
+                        if (!quiz) return null;
+                        const submitted = quiz.status === "submitted";
+                        const open = submitted || openWeek.isDone;
+                        return (
+                          <div className="flex-none px-4 pb-3">
+                            <div
+                              className={cn(
+                                "flex items-center gap-3 rounded-[12px] border px-4 py-3",
+                                open
+                                  ? "border-[var(--brand)] bg-[var(--brand-soft)]"
+                                  : "border-[var(--line-soft)] bg-[var(--surface)]"
+                              )}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[13px] font-bold text-[var(--ink)]">
+                                  Week {quiz.weekNumber} quiz
+                                </p>
+                                <p className="text-[11px] font-semibold text-[var(--ink-3)]">
+                                  {longDate(quiz.scheduledDate)} · {quiz.totalQuestions} questions
+                                  {submitted &&
+                                    quiz.score != null &&
+                                    ` · Score ${quiz.score}/${quiz.totalQuestions}`}
+                                </p>
                               </div>
+                              {open ? (
+                                <Link
+                                  href={`/students/quiz/${quiz.id}`}
+                                  onClick={closeWeek}
+                                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[11.5px] font-bold bg-[var(--brand)] text-white flex-none"
+                                >
+                                  {submitted ? "Review" : "Start"}
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </Link>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--ink-4)] flex-none">
+                                  <Lock className="w-3.5 h-3.5" />
+                                  Locked
+                                </span>
+                              )}
                             </div>
-                          );
-                        })()}
+                          </div>
+                        );
+                      })()}
                       <div className="flex-none px-4 py-3 border-t border-[var(--line-soft)]">
                         <button
                           type="button"

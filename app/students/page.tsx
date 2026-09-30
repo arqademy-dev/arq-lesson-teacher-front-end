@@ -14,7 +14,6 @@ import {
 } from "@/lib/api";
 import {
   BookOpen,
-  Loader2,
   LogOut,
   CreditCard,
   ArrowRight,
@@ -24,15 +23,26 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Matches your real /api/students/me response — everything about the
+// student's enrolment (programme, class, phone, etc.) lives under
+// studentProfile, not flat on the top-level object.
 type StudentMe = {
+  id?: string;
+  email?: string;
   firstName?: string;
   lastName?: string;
-  email?: string;
   arqId?: string;
-  academicLevel?: string | null;
-  programId?: string | null;
-  programmeTitle?: string | null;
-  class?: { id: string; title: string; term?: string | null } | null;
+  studentProfile?: {
+    id?: string;
+    educatorId?: string | null;
+    programId?: string | null;
+    programmeTitle?: string | null; // added by the backend patch
+    classId?: string | null;
+    className?: string | null; // if you add a similar join for class
+    phone?: string | null;
+    enrollmentDate?: string;
+    academicLevel?: string | null;
+  };
   [key: string]: unknown;
 };
 
@@ -91,12 +101,10 @@ export default function StudentDashboardPage() {
   const paymentState = (() => {
     if (!activePlan) return "none" as const;
 
-    // Prefer list of payments for this plan
     const forPlan = payments.filter((p) => p.learningPlanId === activePlan.planId);
     if (forPlan.some((p) => p.status === "success")) return "success" as const;
     if (forPlan.some((p) => p.status === "pending")) return "pending" as const;
 
-    // Fallback: dashboard summary flags
     if (dashPayments?.hasSuccessfulPayment) return "success" as const;
     if (dashPayments?.hasPendingPayment) return "pending" as const;
 
@@ -108,10 +116,12 @@ export default function StudentDashboardPage() {
       ? `${me.firstName ?? ""} ${me.lastName ?? ""}`.trim()
       : null;
 
+  // CHANGED — reads the real nested shape: me.studentProfile.programmeTitle,
+  // falling back to className / academicLevel if those exist too.
   const programmeOrClass =
-    me?.programmeTitle ||
-    me?.class?.title ||
-    me?.academicLevel ||
+    me?.studentProfile?.programmeTitle ||
+    me?.studentProfile?.className ||
+    me?.studentProfile?.academicLevel ||
     null;
 
   return (
@@ -121,17 +131,22 @@ export default function StudentDashboardPage() {
 
       <header className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-[var(--line)] bg-[color-mix(in_srgb,var(--canvas)_82%,transparent)] backdrop-blur-[14px]">
         <div className="flex items-center gap-2.5">
-          <span className="font-heading font-semibold text-[13px] tracking-[0.155em] text-[var(--ink)]">
-            ARQADEMY
+          <span className="w-8 h-8 rounded-xl grid place-items-center border border-3 bg-[var(--brand-soft)] text-[var(--brand)] flex-none">
+            N
           </span>
-          <span className="text-[10px] font-bold tracking-wider uppercase text-[var(--ink-3)]">
-            Student
-          </span>
+          <div className="leading-none">
+            <div className="font-heading font-semibold text-[13px] tracking-[0.155em] text-[var(--ink)]">
+              NEXT CLASS
+            </div>
+            <div className="mt-0.5 text-[8.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-4)]">
+              Powered by Arqademy
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <Link
             href="/students/profile"
-            className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[var(--ink-2)] hover:text-[var(--brand)]"
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--ink-2)] hover:text-[var(--brand)]"
           >
             <User className="w-4 h-4" />
             Profile
@@ -139,7 +154,7 @@ export default function StudentDashboardPage() {
           <button
             type="button"
             onClick={handleLogout}
-            className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[var(--ink-2)] hover:text-[var(--brand)]"
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--ink-2)] hover:text-[var(--brand)]"
           >
             <LogOut className="w-4 h-4" />
             Sign out
@@ -149,24 +164,28 @@ export default function StudentDashboardPage() {
 
       <main className="relative z-10 max-w-3xl mx-auto px-6 py-10 pb-28">
         <p className="text-[9.5px] font-bold tracking-[0.18em] uppercase text-[var(--brand)] mb-2">
-          Dashboard
+          CLASSROOM
         </p>
 
-        <h1 className="font-heading text-[22px] text-[var(--ink)]">
-          {fullName ? `Welcome, ${me?.firstName?.trim()}` : "Welcome back"}
-        </h1>
-        <p className="mt-1.5 text-[13px] text-[var(--ink-3)]">
-          {programmeOrClass
-            ? `Registered · ${programmeOrClass}`
-            : "Your plan, payment, and next step."}
-        </p>
-
-        {loading && (
-          <div className="mt-10 flex items-center gap-2 text-[var(--ink-3)] text-[13px]">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Loading your dashboard…
-          </div>
+        {loading ? (
+          <div className="h-7 w-56 rounded-md bg-[var(--surface-3)] animate-pulse" />
+        ) : (
+          <h1 className="font-heading text-[22px] text-[var(--ink)]">
+            {fullName ? `Welcome, ${me?.firstName?.trim()}` : "Welcome back"}
+          </h1>
         )}
+
+        {loading ? (
+          <div className="mt-2 h-4 w-40 rounded bg-[var(--surface-3)] animate-pulse" />
+        ) : (
+          <p className="mt-1.5 text-[13px] text-[var(--ink-3)]">
+            {programmeOrClass
+              ? `Registered · ${programmeOrClass}`
+              : "Your plan, payment, and next step."}
+          </p>
+        )}
+
+        {loading && <DashboardSkeleton />}
 
         {error && (
           <div className="mt-8 space-y-3 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-5">
@@ -294,6 +313,21 @@ export default function StudentDashboardPage() {
         <MessageCircle className="w-[18px] h-[18px]" />
         Community
       </Link>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="mt-6 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)] overflow-hidden animate-pulse">
+      <div className="px-5 py-4 border-b border-[var(--line-soft)] space-y-2">
+        <div className="h-2.5 w-20 rounded bg-[var(--surface-3)]" />
+        <div className="h-4 w-48 rounded bg-[var(--surface-3)]" />
+        <div className="h-3 w-64 rounded bg-[var(--surface-3)]" />
+      </div>
+      <div className="px-5 py-5">
+        <div className="h-14 w-full sm:w-64 rounded-[14px] bg-[var(--surface-3)]" />
+      </div>
     </div>
   );
 }

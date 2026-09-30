@@ -8,6 +8,7 @@ import {
   Users,
   BookOpen,
   CreditCard,
+  HandCoins,
   Bell,
   Moon,
   Sun,
@@ -26,6 +27,7 @@ const NAV = [
   { href: "/admin/curriculum", label: "Curriculum", icon: BookOpen },
   { href: "/admin/content-bank", label: "Content Bank", icon: Library },
   { href: "/admin/payments", label: "Payments", icon: CreditCard },
+  { href: "/admin/pricing-tiers", label: "Pricing Tiers", icon: HandCoins },
 ];
 
 type Props = {

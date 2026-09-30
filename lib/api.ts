@@ -2134,3 +2134,43 @@ export async function getStudentPaymentStatus(paymentId: string) {
     { skipAuthRedirect: false }
   );
 }
+
+
+export type ProgrammePrice = {
+  id: string;
+  programmeId: string;
+  label: string | null;
+  priceNaira: number;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export async function listProgrammePrices(programmeId: string) {
+  return api<ProgrammePrice[]>(`/api/admin/programme-prices/programme/${programmeId}`, {
+    skipAuthRedirect: false,
+  });
+}
+
+export async function createProgrammePrice(body: {
+  programmeId: string;
+  priceNaira: number;
+  label?: string;
+  isActive?: boolean;
+}) {
+  return api<ProgrammePrice>("/api/admin/programme-prices", {
+    method: "POST",
+    body,
+    skipAuthRedirect: false,
+  });
+}
+
+export async function updateProgrammePrice(
+  id: string,
+  body: { priceNaira?: number; label?: string | null; isActive?: boolean }
+) {
+  return api<ProgrammePrice>(`/api/admin/programme-prices/${id}`, {
+    method: "PATCH",
+    body,
+    skipAuthRedirect: false,
+  });
+}
