@@ -1379,22 +1379,14 @@ export async function listAdminWeeklyQuizzes(learningPlanId: string) {
    ADMIN — Students (enrolment)
    ============================================================ */
 
-export type AdminStudentGuardian = {
-  id?: string;
-  fullName: string;
-  phone?: string | null;
-  email?: string | null;
-  relationship?: string | null;
-  isPrimary?: boolean;
-};
-
 export type AdminStudent = {
   id: string;
-  userId: string;
   educatorId: string | null;
   classId: string | null;
+  className?: string | null;
   programId: string | null;
   programmeTitle?: string | null;
+  programmeStatus?: ProgrammeStatus | null;
   enrollmentDate: string;
   academicLevel?: string | null;
   phone?: string | null;
@@ -1402,8 +1394,46 @@ export type AdminStudent = {
   lastName: string;
   email: string;
   arqId: string;
-  active: boolean;
-  guardians?: AdminStudentGuardian[];
+};
+
+export type AdminStudentGuardian = {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  email: string | null;
+  relationship: string | null;
+  isPrimary: boolean;
+};
+
+export type AdminStudentFullProfile = {
+  student: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    arqId: string;
+    classId: string | null;
+    className: string | null;
+    programId: string | null;
+    programmeTitle: string | null;
+    programmeStatus: ProgrammeStatus | null;
+    academicLevel: string | null;
+    enrollmentDate: string;
+    phone: string | null;
+  };
+
+  educator: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  } | null;
+
+  guardians: AdminStudentGuardian[];
+
+  learningPlans: unknown[];
+  payments: unknown[];
+  assessments: unknown;
 };
 
 export type AdminEnrollStudentPayload = {
@@ -1466,12 +1496,6 @@ export async function listAdminStudents(query: ListAdminStudentsQuery = {}) {
     `/api/admin/students${adminStudentsQuery(query)}`,
     { skipAuthRedirect: false }
   );
-}
-
-export async function getAdminStudent(id: string) {
-  return api<AdminStudent>(`/api/admin/students/${id}`, {
-    skipAuthRedirect: false,
-  });
 }
 
 export async function enrollAdminStudent(body: AdminEnrollStudentPayload) {
@@ -2174,3 +2198,19 @@ export async function updateProgrammePrice(
     skipAuthRedirect: false,
   });
 }
+
+export async function getAdminStudentFullProfile(
+  studentId: string
+): Promise<AdminStudentFullProfile> {
+  return api<AdminStudentFullProfile>(
+    `/api/admin/students/${studentId}/full-profile`,
+    { skipAuthRedirect: false }
+  );
+}
+
+export async function getAdminStudentFiles(studentId: string) {
+  return api(`/api/admin/students/${studentId}/files`, {
+    skipAuthRedirect: false,
+  });
+}
+

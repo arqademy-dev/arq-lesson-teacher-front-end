@@ -15,7 +15,8 @@ import {
   LogOut,
   ChevronRight,
   Library,
-  ToyBrick
+  ToyBrick,
+  GraduationCap,
 } from "lucide-react";
 import { applyTheme, getStoredTheme, toggleTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/admin/educators", label: "Educators", icon: Users },
+  { href: "/admin/students", label: "Students", icon: GraduationCap },
   { href: "/admin/programmes", label: "Programmes", icon: ToyBrick },
   { href: "/admin/curriculum", label: "Curriculum", icon: BookOpen },
   { href: "/admin/content-bank", label: "Content Bank", icon: Library },
