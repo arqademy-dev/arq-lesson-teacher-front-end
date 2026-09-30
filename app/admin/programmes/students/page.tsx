@@ -111,12 +111,14 @@ export default function AdminStudentsPage() {
   );
 
   const visible = useMemo(() => {
-    if (filter === "active") return students.filter((s) => s.active);
+    if (filter === "active") {
+      return students.filter((s) => s.active !== false);
+    }
+
     return students;
   }, [students, filter]);
 
-  const activeCount = students.filter((s) => s.active).length;
-
+const activeCount = students.filter((s) => s.active !== false).length;
   async function openDetail(id: string) {
     setDetailLoading(true);
     setSelected(null);
@@ -141,8 +143,9 @@ export default function AdminStudentsPage() {
       academicLevel: s.academicLevel ?? "",
       programId: s.programId ?? "",
       educatorId: s.educatorId ?? "",
-      active: s.active,
+      active: s.active !== false,
     });
+
     setEditOpen(true);
   }
 
@@ -196,7 +199,7 @@ export default function AdminStudentsPage() {
   }
 
   const primaryGuardian = selected?.guardians?.[0];
-
+  
   return (
     <AdminShell
       title="Students"
@@ -340,12 +343,12 @@ export default function AdminStudentsPage() {
                   <td className="px-6 py-4">
                     <span
                       className={`inline-block px-3 py-1 text-xs font-bold rounded-full ${
-                        s.active
+                        s.active !== false
                           ? "bg-[var(--ok-soft)] text-[var(--ok)]"
                           : "bg-[var(--surface-3)] text-[var(--ink-3)]"
                       }`}
                     >
-                      {s.active ? "Active" : "Inactive"}
+                      {s.active !== false ? "Active" : "Inactive"}
                     </span>
                   </td>
                   <td className="px-6 py-4">

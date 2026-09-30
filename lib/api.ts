@@ -566,9 +566,12 @@ export async function listPendingEducators() {
 }
 
 export async function listAllEducators() {
-  return api<AdminEducator[]>("/api/admin/educators", {
-    skipAuthRedirect: false,
-  });
+  return api<AdminEducator[]>(
+    "/api/admin/educators",
+    {
+      skipAuthRedirect: false,
+    }
+  );
 }
 
 export async function getAdminEducator(educatorId: string) {
@@ -1170,10 +1173,35 @@ export async function createProgramme(payload: CreateProgrammePayload) {
 }
 
 /** Admin: list programmes (optional filters) */
-export async function listProgrammes(query: ListProgrammesQuery = {}) {
-  return api<Programme[]>(`/api/admin/programmes${programmesQuery(query)}`, {
-    skipAuthRedirect: false,
-  });
+export async function listProgrammes(
+  query: ListProgrammesQuery = {}
+) {
+  const params = new URLSearchParams();
+
+  if (query.status) {
+    params.set("status", query.status);
+  }
+
+  if (query.search) {
+    params.set("search", query.search);
+  }
+
+  if (query.limit !== undefined) {
+    params.set("limit", String(query.limit));
+  }
+
+  if (query.offset !== undefined) {
+    params.set("offset", String(query.offset));
+  }
+
+  const qs = params.toString();
+
+  return api<Programme[]>(
+    `/api/admin/programmes${qs ? `?${qs}` : ""}`,
+    {
+      skipAuthRedirect: false,
+    }
+  );
 }
 
 /** Admin: get one programme by id */
@@ -1430,19 +1458,27 @@ export type AdminStudentGuardian = {
 
 export type AdminStudent = {
   id: string;
+
   educatorId: string | null;
   classId: string | null;
   className: string | null;
+
   programId: string | null;
   programmeTitle: string | null;
   programmeStatus: ProgrammeStatus | null;
+
   enrollmentDate: string;
   academicLevel: string | null;
   phone: string | null;
+
   firstName: string;
   lastName: string;
   email: string;
   arqId: string;
+
+  // Legacy student-management fields
+  active?: boolean;
+  guardians?: AdminStudentGuardian[];
 };
 
 export type AdminStudentEducator = {
@@ -1582,7 +1618,7 @@ export type AdminEnrollStudentResult = {
     educatorId: string | null;
     programId: string | null;
     classId: string | null;
-    academicLevel?: string | null;
+    academicLevel: string | null;
     enrollmentDate: string;
     guardian?: AdminStudentGuardian | null;
   };
@@ -1627,38 +1663,50 @@ export async function enrollAdminStudent(body: AdminEnrollStudentPayload) {
   });
 }
 
+export type UpdateAdminStudentPayload = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string | null;
+  academicLevel?: string | null;
+  programId?: string | null;
+  educatorId?: string | null;
+  classId?: string | null;
+  active?: boolean;
+  guardian?: {
+    fullName: string;
+    phone?: string | null;
+    email?: string | null;
+    relationship?: string | null;
+    isPrimary?: boolean;
+  } | null;
+};
+
 export async function updateAdminStudent(
   id: string,
-  body: {
-    firstName?: string;
-    lastName?: string;
-    email?: string;
-    academicLevel?: string | null;
-    phone?: string | null;
-    classId?: string | null;
-    programId?: string | null;
-    educatorId?: string | null;
-    active?: boolean;
-    guardian?: {
-      fullName: string;
-      phone?: string;
-      email?: string;
-      relationship?: string;
-    };
-  }
+  payload: UpdateAdminStudentPayload
 ) {
-  return api<AdminStudent>(`/api/admin/students/${id}`, {
-    method: "PATCH",
-    body,
-    skipAuthRedirect: false,
-  });
+  return api<AdminStudent>(
+    `/api/admin/students/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+      skipAuthRedirect: false,
+    }
+  );
 }
 
 /** Soft-delete: deactivates the user */
 export async function deactivateAdminStudent(id: string) {
-  return api<{ message: string; student: AdminStudent }>(
+  return api<{
+    message: string;
+    student: AdminStudent;
+  }>(
     `/api/admin/students/${id}`,
-    { method: "DELETE", skipAuthRedirect: false }
+    {
+      method: "DELETE",
+      skipAuthRedirect: false,
+    }
   );
 }
 
@@ -2373,6 +2421,16 @@ export async function createAdminStudentLearningPlan(
     {
       method: "POST",
       body: payload, // api() already JSON.stringifies — do NOT stringify here
+      skipAuthRedirect: false,
+    }
+  );
+}
+
+
+export async function getAdminStudent(id: string) {
+  return api<AdminStudent>(
+    `/api/admin/students/${id}`,
+    {
       skipAuthRedirect: false,
     }
   );
