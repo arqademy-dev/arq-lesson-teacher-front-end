@@ -592,16 +592,40 @@ export async function setEducatorApproval(
    ADMIN — Students
    ============================================================ */
 
-export async function getAdminStudentReport(studentId: string) {
-  return api(`/api/admin/students/${studentId}/report`, {
-    skipAuthRedirect: false,
-  });
-}
+// GET /api/admin/students/:studentId/learning-history
+export type AdminStudentLearningHistory = {
+  student: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    arqId: string;
+    academicLevel: string | null;
+    enrollmentDate: string;
+  };
+
+  learningPlans: Array<
+    AdminStudentLearningPlan & {
+      isPaid: boolean;
+    }
+  >;
+};
 
 export async function getAdminStudentLearningHistory(studentId: string) {
-  return api(`/api/admin/students/${studentId}/learning-history`, {
-    skipAuthRedirect: false,
-  });
+  return api<AdminStudentLearningHistory>(
+    `/api/admin/students/${studentId}/learning-history`,
+    { skipAuthRedirect: false }
+  );
+}
+
+// GET /api/admin/students/:studentId/report
+export type AdminStudentReport = Record<string, any>;
+
+export async function getAdminStudentReport(studentId: string) {
+  return api<AdminStudentReport>(
+    `/api/admin/students/${studentId}/report`,
+    { skipAuthRedirect: false }
+  );
 }
 
 /* ============================================================
@@ -1378,23 +1402,22 @@ export async function listAdminWeeklyQuizzes(learningPlanId: string) {
 /* ============================================================
    ADMIN — Students (enrolment)
    ============================================================ */
+export type LearningPlanStatus =
+  | "active"
+  | "completed"
+  | "paused"
+  | "cancelled";
 
-export type AdminStudent = {
-  id: string;
-  educatorId: string | null;
-  classId: string | null;
-  className?: string | null;
-  programId: string | null;
-  programmeTitle?: string | null;
-  programmeStatus?: ProgrammeStatus | null;
-  enrollmentDate: string;
-  academicLevel?: string | null;
-  phone?: string | null;
-  firstName: string;
-  lastName: string;
-  email: string;
-  arqId: string;
-};
+export type LearningPlanTopicStatus =
+  | "pending"
+  | "in_progress"
+  | "completed";
+
+export type PaymentStatus =
+  | "pending"
+  | "success"
+  | "failed"
+  | "refunded";
 
 export type AdminStudentGuardian = {
   id: string;
@@ -1403,6 +1426,107 @@ export type AdminStudentGuardian = {
   email: string | null;
   relationship: string | null;
   isPrimary: boolean;
+};
+
+export type AdminStudent = {
+  id: string;
+  educatorId: string | null;
+  classId: string | null;
+  className: string | null;
+  programId: string | null;
+  programmeTitle: string | null;
+  programmeStatus: ProgrammeStatus | null;
+  enrollmentDate: string;
+  academicLevel: string | null;
+  phone: string | null;
+  firstName: string;
+  lastName: string;
+  email: string;
+  arqId: string;
+};
+
+export type AdminStudentEducator = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+};
+
+export type AdminScheduledSession = {
+  id: string;
+  learningPlanTopicId: string;
+  scheduledDate: string;
+  sessionDayNumber: number;
+  isCompleted: boolean;
+  educatorNotes: string | null;
+};
+
+export type AdminLearningPlanTopic = {
+  topicId: string;
+  topicTitle?: string;
+  status: LearningPlanTopicStatus;
+  done: AdminScheduledSession[];
+  todo: AdminScheduledSession[];
+};
+
+export type AdminStudentLearningPlan = {
+  planId: string;
+  status: LearningPlanStatus;
+  startDate: string;
+  endDate: string | null;
+  requireCorrectAnswersToProgress: boolean;
+  topics: AdminLearningPlanTopic[];
+};
+
+export type AdminStudentPaymentProviderMeta = {
+  accountName?: string;
+  bankName?: string;
+  expiresAt?: string;
+};
+
+export type AdminStudentPayment = {
+  id: string;
+  studentId: string;
+  learningPlanId: string;
+  pricingTierId: string | null;
+  providerMeta: AdminStudentPaymentProviderMeta | null;
+  amountNaira: number;
+  status: PaymentStatus;
+  programmePriceId: string | null;
+  gafiaAccountNumber: string | null;
+  provider: string | null;
+  providerReference: string | null;
+  paidAt: string | null;
+  createdAt: string;
+};
+
+export type AdminStudentAssessmentActivity = {
+  id: string;
+  studentId: string;
+  interactiveElementId: string;
+  scheduledSessionId: string;
+  studentResponse: Record<string, any>;
+  isCorrect: boolean;
+  scoreAwarded: number;
+  attemptNumber: number;
+  timeSpentSeconds: number | null;
+  submittedAt: string;
+  questionId: string | null;
+  interactionType?: string;
+  resourceTitle?: string;
+  topicTitle?: string;
+};
+
+export type AdminStudentAssessmentStats = {
+  totalSubmissions: number;
+  correctSubmissions: number;
+  accuracyPercent: number;
+  averageScore: number;
+};
+
+export type AdminStudentAssessments = {
+  stats: AdminStudentAssessmentStats;
+  activity: AdminStudentAssessmentActivity[];
 };
 
 export type AdminStudentFullProfile = {
@@ -1422,18 +1546,15 @@ export type AdminStudentFullProfile = {
     phone: string | null;
   };
 
-  educator: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-  } | null;
+  educator: AdminStudentEducator | null;
 
   guardians: AdminStudentGuardian[];
 
-  learningPlans: unknown[];
-  payments: unknown[];
-  assessments: unknown;
+  learningPlans: AdminStudentLearningPlan[];
+
+  payments: AdminStudentPayment[];
+
+  assessments: AdminStudentAssessments;
 };
 
 export type AdminEnrollStudentPayload = {
@@ -2199,18 +2320,60 @@ export async function updateProgrammePrice(
   });
 }
 
-export async function getAdminStudentFullProfile(
-  studentId: string
-): Promise<AdminStudentFullProfile> {
+// GET /api/admin/students/:studentId/full-profile
+export async function getAdminStudentFullProfile(studentId: string) {
   return api<AdminStudentFullProfile>(
     `/api/admin/students/${studentId}/full-profile`,
     { skipAuthRedirect: false }
   );
 }
 
+// GET /api/admin/students/:studentId/files
+export type AdminStudentFile = {
+  id: string;
+  dailySubmissionId: string;
+  fileUrl: string;
+  fileKey: string | null;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+};
+
 export async function getAdminStudentFiles(studentId: string) {
-  return api(`/api/admin/students/${studentId}/files`, {
-    skipAuthRedirect: false,
-  });
+  return api<AdminStudentFile[]>(
+    `/api/admin/students/${studentId}/files`,
+    { skipAuthRedirect: false }
+  );
 }
 
+// POST /api/admin/students/:studentId/learning-plan
+export type CreateProgrammeLearningPlanPayload = {
+  programmeId: string;
+  weeks: number;
+  quizDay: "friday" | "saturday";
+  quizSize: number;
+  quizDurationMinutes?: number;
+  startDate: string;
+  requireCorrectAnswersToProgress?: boolean;
+};
+
+export type CreateProgrammeLearningPlanResponse = {
+  plan: Record<string, any>;
+  paymentId: string;
+  amountNaira: number;
+};
+
+export async function createAdminStudentLearningPlan(
+  studentId: string,
+  payload: CreateProgrammeLearningPlanPayload
+) {
+  return api<CreateProgrammeLearningPlanResponse>(
+    `/api/admin/students/${studentId}/learning-plan`,
+    {
+      method: "POST",
+      body: payload, // api() already JSON.stringifies — do NOT stringify here
+      skipAuthRedirect: false,
+    }
+  );
+}

@@ -10,12 +10,7 @@ import {
   type AdminStudent,
   ApiError,
 } from "@/lib/api";
-import {
-  Loader2,
-  Search,
-  Users,
-  ChevronRight,
-} from "lucide-react";
+import { Loader2, Search, Users, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function AdminStudentsPage() {
@@ -55,7 +50,9 @@ export default function AdminStudentsPage() {
           );
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
@@ -101,7 +98,9 @@ export default function AdminStudentsPage() {
 
     students.forEach((student) => {
       if (!student.programId) return;
-      counts[student.programId] = (counts[student.programId] || 0) + 1;
+
+      counts[student.programId] =
+        (counts[student.programId] || 0) + 1;
     });
 
     return counts;
@@ -122,6 +121,7 @@ export default function AdminStudentsPage() {
           <h2 className="font-heading text-[20px] text-[var(--ink)] mb-1">
             Student directory
           </h2>
+
           <p className="text-[13px] text-[var(--ink-3)]">
             View and manage students enrolled across your programmes.
           </p>
@@ -132,6 +132,7 @@ export default function AdminStudentsPage() {
             <div className="text-[9.5px] font-bold tracking-[0.14em] uppercase text-[var(--ink-3)]">
               Total students
             </div>
+
             <div className="font-heading text-[20px] font-semibold mt-0.5 text-[var(--ink)] tabular-nums">
               {students.length}
             </div>
@@ -253,7 +254,9 @@ export default function AdminStudentsPage() {
                         </div>
 
                         <div className="text-[11px] text-[var(--ink-3)] mt-1 space-y-0.5">
-                          {student.email && <div>{student.email}</div>}
+                          {student.email && (
+                            <div>{student.email}</div>
+                          )}
 
                           {student.arqId && (
                             <div className="font-mono text-[var(--ink-4)]">
@@ -285,7 +288,9 @@ export default function AdminStudentsPage() {
                             )}
                           </>
                         ) : (
-                          <span className="text-[var(--ink-4)]">—</span>
+                          <span className="text-[var(--ink-4)]">
+                            —
+                          </span>
                         )}
                       </td>
 
@@ -317,21 +322,21 @@ export default function AdminStudentsPage() {
                       {/* View */}
                       <td className="px-4 py-3.5">
                         <div className="flex items-center justify-end gap-2">
-                        <Link
+                          <Link
                             href={`/admin/students/${student.id}/profile`}
                             className="inline-flex items-center gap-1 h-8 px-2.5 rounded-[7px] text-[11px] font-bold text-[var(--brand)] hover:bg-[var(--surface-2)]"
                           >
                             Profile
                             <ChevronRight className="w-3.5 h-3.5" />
-                        </Link>
+                          </Link>
 
-                        <Link
+                          <Link
                             href={`/admin/students/${student.id}/reports`}
                             className="inline-flex items-center gap-1 h-8 px-2.5 rounded-[7px] text-[11px] font-bold text-[var(--brand)] hover:bg-[var(--surface-2)]"
                           >
                             Report
                             <ChevronRight className="w-3.5 h-3.5" />
-                        </Link>
+                          </Link>
                         </div>
                       </td>
                     </tr>
