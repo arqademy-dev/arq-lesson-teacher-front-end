@@ -214,7 +214,32 @@ export default function StudentLearningPlanPage() {
     [plans]
   );
 
-  const weeks = useMemo(() => (activePlan ? buildWeeks(activePlan) : []), [activePlan]);
+  const rawWeeks = useMemo(() => (activePlan ? buildWeeks(activePlan) : []), [activePlan]);
+
+  // A week only opens once the PREVIOUS week's quiz is submitted — sessions
+  // being done isn't enough on its own. No quiz scheduled for a week counts
+  // as "done" for gating purposes, so it never blocks anything.
+  const weeks = useMemo(() => {
+    const quizByWeek = new Map(quizzes.map((q) => [q.weekNumber, q]));
+    let blocked = false;
+    return rawWeeks.map((w) => {
+      if (blocked) {
+        const lock = (s: PlanSession) => ({ ...s, state: "locked" as DayState });
+        return {
+          ...w,
+          sessions: w.sessions.map(lock),
+          days: w.days.map((d) => ({ date: d.date, sessions: d.sessions.map(lock) })),
+          isDone: false,
+          isCurrent: false,
+          isFuture: true,
+        };
+      }
+      const quiz = quizByWeek.get(w.week);
+      const quizDone = !quiz || quiz.status === "submitted";
+      if (!quizDone) blocked = true; // blocks every week AFTER this one
+      return w;
+    });
+  }, [rawWeeks, quizzes]);
 
   const currentWeekIdx = weeks.findIndex((w) => w.isCurrent);
   const completedWeeks = weeks.filter((w) => w.isDone).length;
