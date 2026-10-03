@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -18,31 +18,11 @@ import {
   Loader2,
   Timer,
   AlertTriangle,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-function useCountdown(expiresAt: string | null | undefined, onExpire: () => void) {
-  const [msLeft, setMsLeft] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!expiresAt) {
-      setMsLeft(null);
-      return;
-    }
-    const target = new Date(expiresAt).getTime();
-    const tick = () => {
-      const left = target - Date.now();
-      setMsLeft(left);
-      if (left <= 0) onExpire();
-    };
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expiresAt]);
-
-  return msLeft;
-}
+type Answer = { selectedIndex?: number; answerText?: string };
 
 function formatClock(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -59,11 +39,18 @@ export default function WeeklyQuizPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Local answer state — seeded from myAnswer, updated as the student picks/types.
-  const [answers, setAnswers] = useState<Record<string, { selectedIndex?: number; answerText?: string }>>({});
+  const [answers, setAnswers] = useState<Record<string, Answer>>({});
+  const [savedIds, setSavedIds] = useState<Record<string, boolean>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // CHANGED — if the backend hasn't sent expiresAt yet (the duration/timer
+  // patch is optional, see DIFFS-quiz-images-duration.md), estimate it
+  // client-side from durationMinutes the moment the quiz loads, so the
+  // countdown still shows instead of silently staying blank.
+  const [localExpiresAt, setLocalExpiresAt] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -71,15 +58,25 @@ export default function WeeklyQuizPage() {
     getMyWeeklyQuiz(quizId)
       .then((q) => {
         setQuiz(q);
-        const seeded: Record<string, { selectedIndex?: number; answerText?: string }> = {};
+        const seeded: Record<string, Answer> = {};
+        const seededSaved: Record<string, boolean> = {};
         for (const question of q.questions) {
           if (question.myAnswer?.selectedIndex != null) {
             seeded[question.id] = { selectedIndex: question.myAnswer.selectedIndex };
+            seededSaved[question.id] = true;
           } else if (question.myAnswer?.answerText) {
             seeded[question.id] = { answerText: question.myAnswer.answerText };
+            seededSaved[question.id] = true;
           }
         }
         setAnswers(seeded);
+        setSavedIds(seededSaved);
+
+        if (q.status !== "submitted" && !q.expiresAt && q.durationMinutes) {
+          setLocalExpiresAt(new Date(Date.now() + q.durationMinutes * 60_000).toISOString());
+        } else {
+          setLocalExpiresAt(null);
+        }
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
@@ -100,54 +97,89 @@ export default function WeeklyQuizPage() {
   }, [load]);
 
   const isSubmitted = quiz?.status === "submitted";
+  const effectiveExpiresAt = quiz?.expiresAt ?? localExpiresAt;
 
-  const handleSubmit = useCallback(async () => {
-    if (!quiz || submitting || isSubmitted) return;
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      const result = await submitWeeklyQuiz(quiz.id);
-      setQuiz(result);
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Could not submit quiz");
-    } finally {
-      setSubmitting(false);
+  // CHANGED — handleSubmit kept in a ref so the countdown's interval always
+  // calls the LATEST version, never a stale closure from an earlier render.
+  const handleSubmit = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!quiz || submitting || isSubmitted) return;
+      setSubmitting(true);
+      setSubmitError(null);
+      try {
+        const result = await submitWeeklyQuiz(quiz.id);
+        setQuiz(result);
+      } catch (err) {
+        if (!opts?.silent) {
+          setSubmitError(err instanceof Error ? err.message : "Could not submit quiz");
+        }
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [quiz, submitting, isSubmitted]
+  );
+  const handleSubmitRef = useRef(handleSubmit);
+  handleSubmitRef.current = handleSubmit;
+
+  const [msLeft, setMsLeft] = useState<number | null>(null);
+  const autoSubmittedRef = useRef(false);
+
+  useEffect(() => {
+    autoSubmittedRef.current = false;
+    if (!effectiveExpiresAt || isSubmitted) {
+      setMsLeft(null);
+      return;
     }
-  }, [quiz, submitting, isSubmitted]);
-
-  const msLeft = useCountdown(!isSubmitted ? quiz?.expiresAt : null, () => {
-    if (!isSubmitted) handleSubmit();
-  });
+    const target = new Date(effectiveExpiresAt).getTime();
+    const tick = () => {
+      const left = target - Date.now();
+      setMsLeft(left);
+      if (left <= 0 && !autoSubmittedRef.current) {
+        autoSubmittedRef.current = true;
+        handleSubmitRef.current({ silent: true }); // no confirmation — time's up
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [effectiveExpiresAt, isSubmitted]);
 
   async function selectMultipleChoice(question: WeeklyQuizQuestion, index: number) {
     if (isSubmitted) return;
-    setAnswers((prev) => ({ ...prev, [question.id]: { selectedIndex: index } }));
-    setSavingId(question.id);
+    const qid = question.id;
+    setAnswers((prev) => ({ ...prev, [qid]: { selectedIndex: index } }));
+    setSavedIds((prev) => ({ ...prev, [qid]: false }));
+    setSavingId(qid);
     try {
-      await saveWeeklyQuizAnswer(quiz!.id, question.id, { selectedIndex: index });
+      await saveWeeklyQuizAnswer(quiz!.id, qid, { selectedIndex: index });
+      setSavedIds((prev) => ({ ...prev, [qid]: true }));
     } catch {
-      // saved locally regardless — a retry happens automatically on the next change or on submit
+      setSavedIds((prev) => ({ ...prev, [qid]: false }));
     } finally {
-      setSavingId(null);
+      setSavingId((prev) => (prev === qid ? null : prev));
     }
   }
 
-  async function saveFillBlank(question: WeeklyQuizQuestion, text: string) {
+  function typeFillBlank(question: WeeklyQuizQuestion, text: string) {
     if (isSubmitted) return;
     setAnswers((prev) => ({ ...prev, [question.id]: { answerText: text } }));
+    setSavedIds((prev) => ({ ...prev, [question.id]: false }));
   }
 
   async function blurFillBlank(question: WeeklyQuizQuestion) {
     if (isSubmitted) return;
-    const text = answers[question.id]?.answerText ?? "";
+    const qid = question.id;
+    const text = answers[qid]?.answerText ?? "";
     if (!text.trim()) return;
-    setSavingId(question.id);
+    setSavingId(qid);
     try {
-      await saveWeeklyQuizAnswer(quiz!.id, question.id, { answerText: text });
+      await saveWeeklyQuizAnswer(quiz!.id, qid, { answerText: text });
+      setSavedIds((prev) => ({ ...prev, [qid]: true }));
     } catch {
-      /* retried on submit */
+      setSavedIds((prev) => ({ ...prev, [qid]: false }));
     } finally {
-      setSavingId(null);
+      setSavingId((prev) => (prev === qid ? null : prev));
     }
   }
 
@@ -209,17 +241,19 @@ export default function WeeklyQuizPage() {
             </p>
           </div>
 
-          {!isSubmitted && msLeft != null && (
+          {!isSubmitted && (
             <div
               className={cn(
                 "flex items-center gap-2 px-3 py-2 rounded-[9px] text-[13px] font-bold flex-none",
-                msLeft < 60_000
-                  ? "bg-[var(--danger-soft)] text-[var(--danger)]"
-                  : "bg-[var(--brand-soft)] text-[var(--brand)]"
+                msLeft == null
+                  ? "bg-[var(--surface-3)] text-[var(--ink-3)]"
+                  : msLeft < 60_000
+                    ? "bg-[var(--danger-soft)] text-[var(--danger)]"
+                    : "bg-[var(--brand-soft)] text-[var(--brand)]"
               )}
             >
               <Timer className="w-4 h-4" />
-              {formatClock(msLeft)}
+              {msLeft == null ? "No time limit" : formatClock(msLeft)}
             </div>
           )}
 
@@ -236,6 +270,7 @@ export default function WeeklyQuizPage() {
             const answer = answers[q.id];
             const revealed = isSubmitted;
             const saving = savingId === q.id;
+            const saved = savedIds[q.id];
 
             return (
               <div
@@ -281,7 +316,7 @@ export default function WeeklyQuizPage() {
                           disabled={revealed}
                           onClick={() => selectMultipleChoice(q, i)}
                           className={cn(
-                            "text-left px-4 py-3 rounded-[10px] border text-[13px] font-medium transition-colors",
+                            "relative text-left px-4 py-3 pr-9 rounded-[10px] border-2 text-[13px] font-medium transition-colors",
                             isRight && "bg-[var(--ok-soft)] border-[var(--ok)] text-[var(--ok)]",
                             isWrongPick && "bg-[var(--danger-soft)] border-[var(--danger)] text-[var(--danger)]",
                             !revealed && isMine && "bg-[var(--brand-soft)] border-[var(--brand)] text-[var(--brand)]",
@@ -291,6 +326,12 @@ export default function WeeklyQuizPage() {
                         >
                           <span className="font-bold mr-2">{String.fromCharCode(65 + i)}.</span>
                           {option}
+                          {/* Explicit, unmissable selected-state marker — not just a background tint */}
+                          {isMine && !revealed && (
+                            <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-[var(--brand)] text-white grid place-items-center">
+                              <Check className="w-3.5 h-3.5" />
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -303,7 +344,7 @@ export default function WeeklyQuizPage() {
                       type="text"
                       disabled={revealed}
                       value={answer?.answerText ?? ""}
-                      onChange={(e) => saveFillBlank(q, e.target.value)}
+                      onChange={(e) => typeFillBlank(q, e.target.value)}
                       onBlur={() => blurFillBlank(q)}
                       placeholder="Type your answer…"
                       className="w-full px-4 py-3 rounded-[10px] border border-[var(--line)] bg-[var(--surface-2)] text-[13px] font-medium disabled:opacity-70"
@@ -316,8 +357,15 @@ export default function WeeklyQuizPage() {
                   </div>
                 )}
 
-                {saving && (
-                  <p className="mt-2 text-[11px] text-[var(--ink-4)] font-semibold">Saving…</p>
+                {!revealed && (
+                  <p className="mt-2 text-[11px] font-semibold">
+                    {saving && <span className="text-[var(--ink-4)]">Saving…</span>}
+                    {!saving && saved && (
+                      <span className="text-[var(--ok)] inline-flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Saved
+                      </span>
+                    )}
+                  </p>
                 )}
 
                 {revealed && q.feedback && (
@@ -351,7 +399,7 @@ export default function WeeklyQuizPage() {
               )}
               <button
                 type="button"
-                onClick={handleSubmit}
+                onClick={() => setConfirmOpen(true)}
                 disabled={submitting}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-11 px-5 rounded-[10px] text-[13px] font-heading font-semibold bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)] disabled:opacity-70"
               >
@@ -368,6 +416,46 @@ export default function WeeklyQuizPage() {
           </div>
         )}
       </main>
+
+      {/* Confirm-before-submit — manual submits only; auto-submit on timeout skips this */}
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/45 backdrop-blur-[2px]"
+            onClick={() => setConfirmOpen(false)}
+            aria-label="Cancel"
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-[18px] bg-[var(--surface)] border border-[var(--line)] shadow-xl p-5">
+            <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)]">Submit this quiz?</h2>
+            <p className="mt-2 text-[12.5px] text-[var(--ink-3)] leading-relaxed">
+              {answeredCount < quiz.questions.length
+                ? `You still have ${quiz.questions.length - answeredCount} unanswered question${quiz.questions.length - answeredCount === 1 ? "" : "s"}. `
+                : ""}
+              Once submitted, you can&apos;t change your answers.
+            </p>
+            <div className="mt-5 flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(false)}
+                className="flex-1 h-10 rounded-[9px] text-[13px] font-bold bg-[var(--surface-3)] text-[var(--ink-2)] hover:bg-[var(--surface-2)]"
+              >
+                Keep working
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmOpen(false);
+                  handleSubmit();
+                }}
+                className="flex-1 h-10 rounded-[9px] text-[13px] font-bold bg-[var(--brand)] text-white hover:bg-[var(--brand-ink)]"
+              >
+                Submit now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Shell>
   );
 }

@@ -54,7 +54,7 @@ export default function AdminLoginPage() {
       <div className="relative hidden lg:flex flex-col justify-center px-[clamp(40px,7vw,110px)] py-12">
         <div className="font-heading font-semibold text-white text-[clamp(38px,4.6vw,62px)] leading-none">
           AR<span className="text-[#12BFB4]">Q</span>
-          <span className="text-[#12BFB4]">academy</span>
+          <span className="text-[#12BFB4]">ademy</span>
         </div>
         <p className="mt-5 text-[11px] font-bold tracking-[0.34em] uppercase text-[#12BFB4]">
           Powering Next Minds
@@ -64,10 +64,6 @@ export default function AdminLoginPage() {
           <br />
           One system for every mind.
         </h2>
-        <p className="mt-3.5 text-[12px] font-bold tracking-[0.26em] uppercase text-white/40">
-          Super Admin
-        </p>
-        <div className="w-[52px] h-0.5 bg-[#12BFB4] rounded-sm mt-8" />
       </div>
 
       {/* FIX 2: Added vertical padding to ensure elements never clip on small screens */}
