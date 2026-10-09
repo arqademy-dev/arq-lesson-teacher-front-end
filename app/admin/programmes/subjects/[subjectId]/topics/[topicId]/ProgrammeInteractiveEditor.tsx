@@ -60,10 +60,20 @@ function loadMc(el: InteractiveElement): McState {
   const options = Array.isArray(cfg.options)
     ? (cfg.options as string[]).concat(["", "", "", ""]).slice(0, 4)
     : ["", "", "", ""];
-  const correctIndex =
-    typeof ans.selectedIndex === "number"
-      ? ans.selectedIndex
-      : Number(ans.correctIndex ?? 0);
+
+  // Prefer the new shape { answer: "text" }
+  let correctIndex = 0;
+  if (typeof ans.answer === "string") {
+    const idx = options.findIndex(
+      (o) => o.trim().toLowerCase() === (ans.answer as string).trim().toLowerCase()
+    );
+    correctIndex = idx >= 0 ? idx : 0;
+  } else if (typeof ans.selectedIndex === "number") {
+    correctIndex = ans.selectedIndex;
+  } else if (typeof ans.correctIndex === "number") {
+    correctIndex = ans.correctIndex;
+  }
+
   return {
     question: String(cfg.prompt ?? cfg.question ?? cfg.prompt_text ?? ""),
     options,
@@ -71,6 +81,7 @@ function loadMc(el: InteractiveElement): McState {
     feedback: String(cfg.feedback ?? ""),
   };
 }
+
 
 function loadFb(el: InteractiveElement): FbState {
   const cfg = (el.configSchema ?? {}) as Record<string, unknown>;
@@ -171,11 +182,11 @@ export function ProgrammeInteractiveEditor({
         options,
         feedback: mc.feedback.trim() || undefined,
       };
-      // selectedIndex matches student payload; correctIndex kept for older readers
+      // NEW shape – matches what the student already sends
       correctAnswers = {
-        selectedIndex: mc.correctIndex,
-        correctIndex: mc.correctIndex,
+        answer: options[mc.correctIndex],
       };
+
     } else if (interactionType === "fill_blank") {
       if (!fb.prompt_text.trim()) {
         setError("Prompt is required");

@@ -159,10 +159,10 @@ export function InteractionRenderer({
         {result && (
           <div className={cn(/* ok / danger styles */)}>
             {result.isCorrect
-              ? `Correct · +${result.scoreAwarded} pts`
+              ? `Correct`
               : allowRetry
-                ? `Not quite · try again`
-                : `Not quite · ${result.scoreAwarded} pts`}
+                ? `try again`
+                : ``}
           </div>
         )}
         {(!result || (result && !result.isCorrect && allowRetry)) &&
@@ -193,31 +193,31 @@ export function InteractionRenderer({
           </button>
         )}
 
-        {result && (
-          <div
-            className={cn(
-              "flex items-center gap-2.5 px-4 py-3 rounded-[12px] text-[13px] font-bold w-full sm:w-auto",
-              result.isCorrect
-                ? "bg-[var(--ok-soft)] text-[var(--ok)]"
-                : "bg-[var(--danger-soft)] text-[var(--danger)]"
-            )}
-          >
-            {result.isCorrect ? (
-              <CheckCircle2 className="w-5 h-5 flex-none" />
-            ) : (
-              <XCircle className="w-5 h-5 flex-none" />
-            )}
-            <span>
-              {result.isCorrect
-                ? type === "file_upload"
-                  ? "Submitted — your educator will review it"
-                  : `Correct · +${result.scoreAwarded} pts`
-                : type === "file_upload"
-                  ? "Nothing submitted yet"
-                  : `Not quite · ${result.scoreAwarded} pts`}
-            </span>
-          </div>
-        )}
+          {result && (
+            <div
+              className={cn(
+                "flex items-center gap-2.5 px-4 py-3 rounded-[12px] text-[13px] font-bold w-full sm:w-auto",
+                result.isCorrect
+                  ? "bg-[var(--ok-soft)] text-[var(--ok)]"
+                  : "bg-[var(--danger-soft)] text-[var(--danger)]"
+              )}
+            >
+              {result.isCorrect ? (
+                <CheckCircle2 className="w-5 h-5 flex-none" />
+              ) : (
+                <XCircle className="w-5 h-5 flex-none" />
+              )}
+              <span>
+                {result.isCorrect
+                  ? type === "file_upload"
+                    ? "Submitted — your educator will review it"
+                    : "Correct"                    
+                  : type === "file_upload"
+                    ? "Nothing submitted yet"
+                    : ""}      
+              </span>
+            </div>
+          )}
       </div>
     </div>
   );

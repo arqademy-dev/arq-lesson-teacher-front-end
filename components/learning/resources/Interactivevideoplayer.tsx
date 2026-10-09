@@ -24,25 +24,31 @@ type Props = {
   title: string;
   elements: SafeInteractiveElement[];
   requireCorrectAnswersToProgress: boolean;
-  /** Owned by the session page — single source of truth for what's answered. */
   results: Record<string, SubmissionResult>;
   priorAnswers?: Record<string, Record<string, unknown>>;
   submittingId?: string | null;
   onSubmitElement: (elementId: string, answer: InteractionAnswer) => void;
 };
 
-/** How long the feedback banner stays up before the video auto-resumes. */
-const AUTO_ADVANCE_DELAY_MS = 1400;
-/** How often we poll getCurrentTime() — YT's API has no timeupdate event. */
+const AUTO_ADVANCE_DELAY_MS = 1400; // how long "Correct" is shown
 const POLL_INTERVAL_MS = 400;
+const SEEK_SETTLE_MS = 1500; // pause checkpoint polling after seeking back
+
+// Identifies one specific attempt's result, so we can tell a fresh answer
+// from an old one that is still sitting in `results`.
+function resultKeyOf(id: string, r?: SubmissionResult): string | null {
+  if (!r) return null;
+  const attempt = (r as { attemptNumber?: number }).attemptNumber ?? 0;
+  return `${id}:${attempt}:${r.isCorrect}`;
+}
 
 export function InteractiveVideoPlayer({
   videoUrl,
   title,
   elements,
-  requireCorrectAnswersToProgress,
+  requireCorrectAnswersToProgress: _requireCorrect,
   results,
-  priorAnswers = {},
+  priorAnswers: _priorAnswers = {},
   submittingId = null,
   onSubmitElement,
 }: Props) {
@@ -54,8 +60,12 @@ export function InteractiveVideoPlayer({
   const pollRef = useRef<number | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
 
+  const handledKeyRef = useRef<string | null>(null); // never reset on popup close
+  const pollPausedUntilRef = useRef(0);
+
   const [ready, setReady] = useState(false);
   const [activeElementId, setActiveElementId] = useState<string | null>(null);
+  const [baselineKey, setBaselineKey] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -72,14 +82,11 @@ export function InteractiveVideoPlayer({
     [elements]
   );
 
-  // CHANGED — this used to be named `isCleared` and required a CORRECT answer
-  // (`r.isCorrect || !requireCorrectAnswersToProgress`) before the video was
-  // allowed to resume, which is the block you were hitting. It now only
-  // checks that the student answered at all — right or wrong — so playback
-  // is never held hostage by a wrong answer. `requireCorrectAnswersToProgress`
-  // still matters elsewhere (the backend still requires correct answers to
-  // mark the whole day complete); it just no longer pauses THIS video.
-  const isAnswered = useCallback((id: string) => !!results[id], [results]);
+  // Cleared only by a CORRECT answer — wrong answers force a rewatch.
+  const isCleared = useCallback(
+    (id: string) => results[id]?.isCorrect === true,
+    [results]
+  );
 
   const clearPoll = useCallback(() => {
     if (pollRef.current != null) {
@@ -88,7 +95,7 @@ export function InteractiveVideoPlayer({
     }
   }, []);
 
-  // Set up the YT player once per video.
+  // ── Player setup ──────────────────────────────────────────────
   useEffect(() => {
     if (!videoId) return;
     let cancelled = false;
@@ -98,7 +105,14 @@ export function InteractiveVideoPlayer({
       if (cancelled || !window.YT) return;
       playerRef.current = new window.YT.Player(containerId, {
         videoId,
-        playerVars: { rel: 0, modestbranding: 1 },
+        playerVars: {
+          rel: 0,
+          modestbranding: 1,
+          fs: 0, // we provide our own fullscreen button
+          disablekb: 1,
+          iv_load_policy: 3,
+          controls: 1,
+        },
         events: {
           onReady: () => setReady(true),
           onStateChange: (e) => setEnded(e.data === YT_STATE_ENDED),
@@ -118,7 +132,7 @@ export function InteractiveVideoPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, containerId, clearPoll]);
 
-  // Keep our fullscreen icon in sync (also handles the user pressing Esc).
+  // Keep our fullscreen icon in sync
   useEffect(() => {
     function onFsChange() {
       setIsFullscreen(document.fullscreenElement === wrapperRef.current);
@@ -127,56 +141,75 @@ export function InteractiveVideoPlayer({
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
-  // Watch playback time and trigger checkpoints in order.
+  // ── Checkpoint polling ────────────────────────────────────────
   useEffect(() => {
     if (!ready || checkpoints.length === 0) return;
 
     pollRef.current = window.setInterval(() => {
       const player = playerRef.current;
       if (!player) return;
-      if (activeElementId) return; // a checkpoint is already open — hold
+      if (activeElementId) return; // popup already open
+      if (Date.now() < pollPausedUntilRef.current) return; // seek still settling
 
       const currentTime = player.getCurrentTime();
-      // CHANGED: was `!isCleared(e.id)` — a checkpoint the student already
-      // answered (even wrong) no longer re-triggers when they seek back past it.
       const next = checkpoints.find(
-        (e) => !isAnswered(e.id) && currentTime >= (e.videoTimestampSeconds ?? 0)
+        (e) =>
+          !isCleared(e.id) && currentTime >= (e.videoTimestampSeconds ?? 0)
       );
 
       if (next) {
-        // Snap back to the exact checkpoint in case the student seeked past it.
         player.seekTo(next.videoTimestampSeconds ?? 0, true);
         player.pauseVideo();
+        // Whatever result exists now is stale; only a different one is a new answer.
+        setBaselineKey(resultKeyOf(next.id, results[next.id]));
         setActiveElementId(next.id);
       }
     }, POLL_INTERVAL_MS);
 
     return clearPoll;
-  }, [ready, checkpoints, isAnswered, activeElementId, clearPoll]);
+  }, [ready, checkpoints, isCleared, activeElementId, clearPoll, results]);
 
-  // React to the parent's results updating (i.e. handleSubmit resolved).
-  // CHANGED — this used to `return` early (stay paused) when the answer was
-  // wrong. It now schedules the resume as soon as ANY answer lands, so a
-  // wrong answer no longer blocks the video.
+  // ── React to a FRESH answer only ──────────────────────────────
   useEffect(() => {
     if (!activeElementId) return;
-    if (!isAnswered(activeElementId)) return; // nothing submitted yet — stay paused
+    const result = results[activeElementId];
+    if (!result) return;
 
-    advanceTimerRef.current = window.setTimeout(() => {
-      setActiveElementId(null);
-      playerRef.current?.playVideo();
-    }, AUTO_ADVANCE_DELAY_MS);
+    const key = resultKeyOf(activeElementId, result);
+    if (key === baselineKey) return; // old attempt, not a new answer
+    if (handledKeyRef.current === key) return;
+    handledKeyRef.current = key;
 
-    return () => {
-      if (advanceTimerRef.current != null) {
-        window.clearTimeout(advanceTimerRef.current);
-      }
-    };
-  }, [results, activeElementId, isAnswered]);
+    if (result.isCorrect) {
+      advanceTimerRef.current = window.setTimeout(() => {
+        setActiveElementId(null);
+        playerRef.current?.playVideo();
+      }, AUTO_ADVANCE_DELAY_MS);
+    } else {
+      const idx = checkpoints.findIndex((e) => e.id === activeElementId);
+      const prevTs =
+        idx > 0 ? checkpoints[idx - 1].videoTimestampSeconds ?? 0 : 0;
+
+      // Same delay as a correct answer, so "Try again" is readable
+      // before the popup closes and the video jumps back.
+      advanceTimerRef.current = window.setTimeout(() => {
+        pollPausedUntilRef.current = Date.now() + SEEK_SETTLE_MS;
+        setActiveElementId(null);
+        playerRef.current?.seekTo(prevTs, true);
+        playerRef.current?.playVideo();
+      }, AUTO_ADVANCE_DELAY_MS);
+    }
+  }, [results, activeElementId, checkpoints, baselineKey]);
 
   const activeElement = checkpoints.find((e) => e.id === activeElementId);
   const activeResult = activeElement ? results[activeElement.id] : undefined;
-  const activeAnswered = !!activeElement && isAnswered(activeElement.id);
+  // Hide the stale result so the reopened popup is clean and submittable.
+  const freshResult =
+    activeElement &&
+    activeResult &&
+    resultKeyOf(activeElement.id, activeResult) !== baselineKey
+      ? activeResult
+      : undefined;
 
   return (
     <div className="space-y-3">
@@ -188,7 +221,9 @@ export function InteractiveVideoPlayer({
         ref={wrapperRef}
         className={cn(
           "relative w-full overflow-hidden border border-[var(--line)] bg-[var(--navy)]",
-          isFullscreen ? "h-screen w-screen rounded-none" : "aspect-video rounded-[12px]"
+          isFullscreen
+            ? "h-screen w-screen rounded-none"
+            : "aspect-video rounded-[12px]"
         )}
       >
         {videoId ? (
@@ -214,9 +249,7 @@ export function InteractiveVideoPlayer({
           </button>
         )}
 
-        {/* Opaque cover once the video ends — this is what hides YouTube's
-            end-screen "suggested videos" grid, since nothing built into
-            the IFrame API can disable it directly anymore. */}
+        {/* End-of-video cover (hides YouTube suggestions) */}
         {ended && !activeElement && (
           <div className="absolute inset-0 z-10 bg-[var(--navy)] flex flex-col items-center justify-center gap-3">
             <CheckCircle2 className="w-10 h-10 text-[var(--ok)]" />
@@ -236,26 +269,19 @@ export function InteractiveVideoPlayer({
           </div>
         )}
 
+        {/* Checkpoint popup */}
         {activeElement && (
-          <div className="absolute inset-0 z-10 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
+          <div className="absolute inset-0 z-30 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
             <div className="w-full max-w-lg rounded-[14px] bg-[var(--surface)] border border-[var(--line)] shadow-xl p-5">
               <InteractionRenderer
+                key={`${activeElement.id}:${baselineKey}`}
                 element={activeElement}
-                result={activeResult}
-                initialAnswer={priorAnswers[activeElement.id] ?? null}
-                // Still offered when the answer was wrong and the plan requires
-                // correctness overall — the student CAN retry for their own
-                // record, they just aren't forced to before the video resumes.
-                allowRetry={
-                  requireCorrectAnswersToProgress &&
-                  activeResult?.isCorrect === false
-                }
+                result={freshResult}
+                initialAnswer={null}
+                allowRetry={false}
                 submitting={submittingId === activeElement.id}
-                // onSubmit={(answer) =>
-                //   onSubmitElement(activeElement.id, answer)
-                // }
-
                 onSubmit={(answer) => {
+                  // normalise fill_blank just in case
                   if (
                     activeElement.interactionType === "fill_blank" &&
                     answer &&
@@ -276,9 +302,17 @@ export function InteractiveVideoPlayer({
                   onSubmitElement(activeElement.id, answer);
                 }}
               />
-              {activeAnswered && (
-                <p className="mt-3 text-[11.5px] font-semibold text-[var(--ink-4)]">
-                  Resuming…
+
+              {freshResult && (
+                <p
+                  className={cn(
+                    "mt-3 text-[13px] font-bold text-center",
+                    freshResult.isCorrect
+                      ? "text-[var(--ok)]"
+                      : "text-[var(--danger)]"
+                  )}
+                >
+                  {freshResult.isCorrect ? "Correct" : "Try again"}
                 </p>
               )}
             </div>
@@ -288,9 +322,9 @@ export function InteractiveVideoPlayer({
 
       {checkpoints.length > 0 && (
         <p className="text-[11.5px] text-[var(--ink-4)] font-semibold">
-          {checkpoints.filter((c) => isAnswered(c.id)).length}/
+          {checkpoints.filter((c) => isCleared(c.id)).length}/
           {checkpoints.length} checkpoint
-          {checkpoints.length === 1 ? "" : "s"} answered
+          {checkpoints.length === 1 ? "" : "s"} cleared
         </p>
       )}
     </div>

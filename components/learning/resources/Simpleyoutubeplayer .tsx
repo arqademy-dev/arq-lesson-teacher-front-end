@@ -40,8 +40,13 @@ export function SimpleYouTubePlayer({ videoUrl }: Props) {
     loadYouTubeApi().then(() => {
       if (cancelled || !window.YT) return;
       playerRef.current = new window.YT.Player(containerId, {
-        videoId,
-        playerVars: { rel: 0, modestbranding: 1 },
+          videoId,
+          playerVars: {
+          rel: 0,
+          modestbranding: 1,
+          fs: 0,               // disable YouTube fullscreen
+          iv_load_policy: 3,
+        },
         events: {
           onStateChange: (e) => setEnded(e.data === YT_STATE_ENDED),
         },
