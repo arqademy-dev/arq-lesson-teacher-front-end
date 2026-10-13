@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AdminShell } from "@/components/layout/AdminShell";
-import { Plus, BookOpen, Users, CheckCircle, Subtitles } from "lucide-react";
+import { Plus, BookOpen, Users, CheckCircle, Subtitles, ClipboardCheck,ChartCandlestick  } from "lucide-react";
 import { listProgrammes, type Programme, ApiError } from "@/lib/api"; // adjust path
 
 export default function AdminProgrammesPage() {
@@ -74,6 +74,20 @@ export default function AdminProgrammesPage() {
           >
             <BookOpen className="w-4 h-4" />
             Subjects
+          </Link>
+          <Link
+            href="/admin/programmes/assessments"
+            className="btn ghost small flex items-center gap-2 rounded-[var(--r-card)]"
+          >
+            <ClipboardCheck className="w-4 h-4" />
+            Assessments
+          </Link>
+          <Link
+            href="/admin/programmes/reports"
+            className="btn ghost small flex items-center gap-2 rounded-[var(--r-card)]"
+          >
+            <ChartCandlestick className="w-4 h-4" />
+            Reports
           </Link>
         </div>
 

@@ -1,10 +1,12 @@
 "use client";
 
-import { RotateCcw } from "lucide-react";
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import type {
   ProgrammeLearningPlan,
   ProgrammeTopic,
   WeeklyQuizSummary,
+  UpdateProgrammePlanPayload,
 } from "@/lib/api";
 
 function Chip({ label, value }: { label: string; value: string }) {
@@ -18,13 +20,16 @@ function Chip({ label, value }: { label: string; value: string }) {
   );
 }
 
+const STATUS_OPTIONS = ["active", "paused", "completed", "cancelled"] as const;
+
 type Props = {
   plan: ProgrammeLearningPlan;
   quizzes: WeeklyQuizSummary[];
   topics: ProgrammeTopic[];
   paymentId?: string;
   amountNaira?: number;
-  onReset: () => void;
+  paymentStatus?: string;
+  onUpdate: (patch: UpdateProgrammePlanPayload) => Promise<void>;
 };
 
 export function PlanView({
@@ -33,14 +38,36 @@ export function PlanView({
   topics,
   paymentId,
   amountNaira,
-  onReset,
+  paymentStatus,
+  onUpdate,
 }: Props) {
+  const [savingField, setSavingField] = useState<"require" | "status" | null>(null);
+
   const quizDayLabel =
     plan.quizDay === "saturday"
       ? "Saturday"
       : plan.quizDay === "friday"
       ? "Friday"
       : plan.quizDay ?? "—";
+
+  async function toggleRequireCorrect() {
+    setSavingField("require");
+    try {
+      await onUpdate({ requireCorrectAnswersToProgress: !plan.requireCorrectAnswersToProgress });
+    } finally {
+      setSavingField(null);
+    }
+  }
+
+  async function changeStatus(status: (typeof STATUS_OPTIONS)[number]) {
+    if (status === plan.status) return;
+    setSavingField("status");
+    try {
+      await onUpdate({ status });
+    } finally {
+      setSavingField(null);
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -54,13 +81,27 @@ export function PlanView({
             <p className="text-xs text-[var(--ink-3)] mt-1">
               {plan.startDate}
               {plan.endDate ? ` → ${plan.endDate}` : ""}
-              {plan.status ? ` • ${plan.status}` : ""}
             </p>
           </div>
-          <button onClick={onReset} className="btn ghost small">
-            <RotateCcw className="w-4 h-4" />
-            Set up another
-          </button>
+
+          {/* NEW — editable status, replaces the old "Set up another" reset
+              (which only cleared local state and never changed anything server-side) */}
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] font-bold text-[var(--ink-3)] uppercase">Status</label>
+            <select
+              value={plan.status}
+              onChange={(e) => changeStatus(e.target.value as (typeof STATUS_OPTIONS)[number])}
+              disabled={savingField === "status"}
+              className="px-3 py-2 rounded-[var(--r-ctl)] border border-[var(--line)] bg-[var(--surface)] text-xs font-bold capitalize disabled:opacity-60"
+            >
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            {savingField === "status" && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--ink-3)]" />}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -74,20 +115,55 @@ export function PlanView({
             }
           />
           <Chip
-              label="Quiz time"
-              value={
-                plan.quizDurationMinutes != null
-                  ? `${plan.quizDurationMinutes} min`
-                  : "Untimed"
-              }
-            />
+            label="Quiz time"
+            value={
+              plan.quizDurationMinutes != null
+                ? `${plan.quizDurationMinutes} min`
+                : "Untimed"
+            }
+          />
+        </div>
+
+        {/* NEW — editable, was hardcoded true at creation and never shown again after */}
+        <div className="mt-5 pt-5 border-t border-[var(--line)]">
+          <button
+            type="button"
+            onClick={toggleRequireCorrect}
+            disabled={savingField === "require"}
+            className={`w-full sm:w-auto px-5 py-3 rounded-[var(--r-card)] border text-left font-semibold text-sm flex items-center gap-3 disabled:opacity-60 ${
+              plan.requireCorrectAnswersToProgress
+                ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]"
+                : "border-[var(--line)] bg-[var(--surface)] text-[var(--ink)]"
+            }`}
+          >
+            {savingField === "require" ? (
+              <Loader2 className="w-4 h-4 animate-spin flex-none" />
+            ) : (
+              <span
+                className="inline-block w-9 h-5 rounded-full relative flex-none"
+                style={{ background: plan.requireCorrectAnswersToProgress ? "var(--brand)" : "var(--surface-3)" }}
+              >
+                <span
+                  className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+                  style={{ left: plan.requireCorrectAnswersToProgress ? "18px" : "2px" }}
+                />
+              </span>
+            )}
+            {plan.requireCorrectAnswersToProgress
+              ? "Must answer correctly to progress — tap to turn off"
+              : "Can progress regardless of correctness — tap to require correct answers"}
+          </button>
         </div>
 
         {(paymentId || amountNaira != null) && (
           <div className="mt-4 text-sm text-[var(--ink-3)]">
             Payment:{" "}
-            <span className="font-semibold text-[var(--warn)]">
-              ₦{Number(amountNaira ?? 0).toLocaleString()} pending
+            <span
+              className={`font-semibold ${
+                paymentStatus === "success" ? "text-[var(--ok)]" : "text-[var(--warn)]"
+              }`}
+            >
+              ₦{Number(amountNaira ?? 0).toLocaleString()} {paymentStatus ?? "pending"}
             </span>
             {paymentId && (
               <span className="text-[11px] ml-2 font-mono">{paymentId}</span>

@@ -5,14 +5,17 @@ import { toast } from "sonner";
 import {
   listProgrammes,
   listProgrammeTopics,
-  listLearningPlansForStudent,
+  getAdminStudentProgrammePlan,
+  updateAdminStudentProgrammePlan,
   createStudentProgrammePlan,
   listAdminWeeklyQuizzes,
   ApiError,
   type Programme,
   type ProgrammeTopic,
   type CreateProgrammePlanPayload,
+  type UpdateProgrammePlanPayload,
   type ProgrammeLearningPlan,
+  type StudentPayment,
   type WeeklyQuizSummary,
 } from "@/lib/api";
 import { PlanSetup } from "./PlanSetup";
@@ -20,8 +23,7 @@ import { PlanView } from "./PlanView";
 
 type ActivePlan = {
   plan: ProgrammeLearningPlan;
-  paymentId?: string;
-  amountNaira?: number;
+  payment: StudentPayment | null;
   quizzes: WeeklyQuizSummary[];
   topics: ProgrammeTopic[];
 };
@@ -40,30 +42,32 @@ export default function PlanBuilder({ studentId }: { studentId: string }) {
         if (cancelled) return;
         setProgrammes(Array.isArray(progs) ? progs : []);
 
+        // CHANGED — was listLearningPlansForStudent(), the OLD class-based
+        // endpoint, which has no idea programme-based plans exist. This is
+        // why a plan vanished on reload: it was never actually being fetched.
         try {
-          const plans = await listLearningPlansForStudent(studentId);
-          const list = Array.isArray(plans) ? (plans as ProgrammeLearningPlan[]) : [];
-          // Prefer active programme plans
-          const first =
-            list.find((p) => p.status === "active") ?? list[0] ?? null;
+          const { plan, payment } = await getAdminStudentProgrammePlan(studentId);
+          if (cancelled) return;
 
-          if (first?.id) {
-            const [quizzes, topics] = await Promise.all([
-              listAdminWeeklyQuizzes(first.id).catch(() => []),
-              first.programmeId
-                ? listProgrammeTopics(first.programmeId).catch(() => [])
-                : Promise.resolve([]),
-            ]);
-            if (!cancelled) {
-              setActive({
-                plan: first,
-                quizzes: Array.isArray(quizzes) ? quizzes : [],
-                topics: Array.isArray(topics) ? topics : [],
-              });
-            }
+          const [quizzes, topics] = await Promise.all([
+            listAdminWeeklyQuizzes(plan.id).catch(() => []),
+            plan.programmeId
+              ? listProgrammeTopics(plan.programmeId).catch(() => [])
+              : Promise.resolve([]),
+          ]);
+          if (!cancelled) {
+            setActive({
+              plan,
+              payment,
+              quizzes: Array.isArray(quizzes) ? quizzes : [],
+              topics: Array.isArray(topics) ? topics : [],
+            });
           }
-        } catch {
-          // no existing plan
+        } catch (err) {
+          // 404 just means no plan yet — anything else is worth surfacing
+          if (!(err instanceof ApiError && err.status === 404)) {
+            toast.error(err instanceof ApiError ? err.message : "Failed to load existing plan");
+          }
         }
       } catch (err) {
         toast.error(err instanceof ApiError ? err.message : "Failed to load");
@@ -87,8 +91,7 @@ export default function PlanBuilder({ studentId }: { studentId: string }) {
       ]);
       setActive({
         plan: result.plan,
-        paymentId: result.paymentId,
-        amountNaira: result.amountNaira,
+        payment: { id: result.paymentId, amountNaira: result.amountNaira, status: "pending" } as StudentPayment,
         quizzes: Array.isArray(quizzes) ? quizzes : [],
         topics: Array.isArray(topics) ? topics : [],
       });
@@ -103,13 +106,15 @@ export default function PlanBuilder({ studentId }: { studentId: string }) {
     }
   }
 
-  function handleReset() {
-    if (
-      confirm(
-        "Clear this view to set up another plan? This does not delete the plan on the server."
-      )
-    ) {
-      setActive(null);
+  // NEW — small edits only (require-correct-answers toggle, pause/cancel).
+  async function handleUpdate(patch: UpdateProgrammePlanPayload) {
+    if (!active) return;
+    try {
+      const updated = await updateAdminStudentProgrammePlan(studentId, active.plan.id, patch);
+      setActive((prev) => (prev ? { ...prev, plan: updated } : prev));
+      toast.success("Plan updated");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to update plan");
     }
   }
 
@@ -125,9 +130,10 @@ export default function PlanBuilder({ studentId }: { studentId: string }) {
         plan={active.plan}
         quizzes={active.quizzes}
         topics={active.topics}
-        paymentId={active.paymentId}
-        amountNaira={active.amountNaira}
-        onReset={handleReset}
+        paymentId={active.payment?.id}
+        amountNaira={active.payment?.amountNaira}
+        paymentStatus={active.payment?.status}
+        onUpdate={handleUpdate}
       />
     );
   }

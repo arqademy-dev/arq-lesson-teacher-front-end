@@ -46,10 +46,10 @@ export function PlanSetup({ programmes, onSave }: Props) {
   const [weeks, setWeeks] = useState(5);
   const [quizDay, setQuizDay] = useState<"friday" | "saturday">("friday");
   const [quizSize, setQuizSize] = useState(50);
-  const [quizDurationMinutes, setQuizDurationMinutes] = useState<number | "">(
-  30
-); // or "" for untimed
+  const [quizDurationMinutes, setQuizDurationMinutes] = useState<number | "">(30);
   const [startDate, setStartDate] = useState(nextMondayYmd());
+  // NEW — was hardcoded to `true` in handleSave and never shown in the form.
+  const [requireCorrectAnswers, setRequireCorrectAnswers] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -77,7 +77,6 @@ export function PlanSetup({ programmes, onSave }: Props) {
     };
   }, [programmeId]);
 
-  // Keep selection valid when programmes list loads
   useEffect(() => {
     if (!programmeId && programmes.length > 0) {
       setProgrammeId(programmes[0].id);
@@ -116,7 +115,7 @@ export function PlanSetup({ programmes, onSave }: Props) {
         quizDay,
         quizSize,
         startDate,
-        requireCorrectAnswersToProgress: true,
+        requireCorrectAnswersToProgress: requireCorrectAnswers, // CHANGED — was hardcoded true
         quizDurationMinutes:
           quizDurationMinutes === "" ? null : quizDurationMinutes,
       });
@@ -234,11 +233,9 @@ export function PlanSetup({ programmes, onSave }: Props) {
               ))}
             </select>
           </div>
+
           <div>
-            {/* // In the form UI: */}
-            <label className="block text-xs font-bold uppercase tracking-wider text-[var(--ink-3)] mb-2">
-              Quiz time limit (minutes)
-            </label>
+            <label className={labelClass}>Quiz time limit (minutes)</label>
             <select
               value={quizDurationMinutes === "" ? "" : String(quizDurationMinutes)}
               onChange={(e) =>
@@ -246,7 +243,7 @@ export function PlanSetup({ programmes, onSave }: Props) {
                   e.target.value === "" ? "" : Number(e.target.value)
                 )
               }
-              className="w-full px-4 py-3 border border-[var(--line)] rounded-[var(--r-card)]"
+              className={fieldClass}
             >
               <option value="">Untimed</option>
               <option value="15">15</option>
@@ -271,6 +268,38 @@ export function PlanSetup({ programmes, onSave }: Props) {
                 Must be a Monday (backend requirement)
               </p>
             )}
+          </div>
+
+          {/* NEW — was hardcoded true, never shown */}
+          <div>
+            <label className={labelClass}>Progress rule</label>
+            <button
+              type="button"
+              onClick={() => setRequireCorrectAnswers((v) => !v)}
+              className={`w-full px-5 py-3 rounded-[var(--r-card)] border text-left font-semibold text-sm flex items-center justify-between ${
+                requireCorrectAnswers
+                  ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]"
+                  : "border-[var(--line)] bg-[var(--surface)] text-[var(--ink)]"
+              }`}
+            >
+              <span>
+                {requireCorrectAnswers
+                  ? "Must answer correctly to progress"
+                  : "Can progress regardless of correctness"}
+              </span>
+              <span
+                className={`inline-block w-9 h-5 rounded-full relative transition-colors flex-none ${
+                  requireCorrectAnswers ? "bg-[var(--brand)]" : "bg-[var(--surface-3)]"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${
+                    requireCorrectAnswers ? "left-4.5" : "left-0.5"
+                  }`}
+                  style={{ left: requireCorrectAnswers ? "18px" : "2px" }}
+                />
+              </span>
+            </button>
           </div>
         </div>
 

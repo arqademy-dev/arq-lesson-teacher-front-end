@@ -2435,3 +2435,40 @@ export async function getAdminStudent(id: string) {
     }
   );
 }
+
+
+/* ============================================================
+   ADMIN — Programme learning plan: view + small edits
+   Paste into lib/api.ts
+   ============================================================ */
+
+export type AdminStudentProgrammePlanResult = {
+  plan: ProgrammeLearningPlan;
+  payment: StudentPayment | null;
+};
+
+/** Fetch the student's existing programme-based plan, if any. 404 if none yet. */
+export async function getAdminStudentProgrammePlan(studentId: string) {
+  return api<AdminStudentProgrammePlanResult>(
+    `/api/admin/students/${studentId}/learning-plan`,
+    { skipAuthRedirect: false }
+  );
+}
+
+export type UpdateProgrammePlanPayload = {
+  requireCorrectAnswersToProgress?: boolean;
+  status?: "active" | "completed" | "paused" | "cancelled";
+};
+
+/** Only requireCorrectAnswersToProgress and status are editable — weeks/quizDay/
+ *  quizSize can't change after the schedule and quizzes are already generated. */
+export async function updateAdminStudentProgrammePlan(
+  studentId: string,
+  planId: string,
+  body: UpdateProgrammePlanPayload
+) {
+  return api<ProgrammeLearningPlan>(
+    `/api/admin/students/${studentId}/learning-plan/${planId}`,
+    { method: "PATCH", body, skipAuthRedirect: false }
+  );
+}
