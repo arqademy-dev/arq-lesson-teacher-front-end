@@ -20,8 +20,9 @@ import {
 
 import { AdminShell } from "@/components/layout/AdminShell";
 import {
-  getAdminStudentFiles,
+  listAdminStudentDailySubmissions,
   getAdminStudentFullProfile,
+  type DailySubmissionFile,
   type AdminStudentFile,
   type AdminStudentFullProfile,
   type AdminStudentLearningPlan,
@@ -35,7 +36,7 @@ export default function StudentReportsPage() {
   const studentId = params?.id as string;
 
   const [data, setData] = useState<AdminStudentFullProfile | null>(null);
-  const [files, setFiles] = useState<AdminStudentFile[]>([]);
+  const [files, setFiles] = useState<DailySubmissionFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -47,13 +48,19 @@ export default function StudentReportsPage() {
         setLoading(true);
         setError("");
 
-        const [profile, studentFiles] = await Promise.all([
-          getAdminStudentFullProfile(studentId),
-          getAdminStudentFiles(studentId),
-        ]);
+        const profile = await getAdminStudentFullProfile(studentId);
+
+        const dayLists = await Promise.all(
+          profile.learningPlans.map((plan) =>
+            listAdminStudentDailySubmissions(studentId, {
+              learningPlanId: plan.planId,
+            })
+          )
+        );
 
         setData(profile);
-        setFiles(studentFiles);
+        setFiles(dayLists.flat().flatMap((day) => day.files));
+
       } catch (err) {
         console.error(err);
         setError("Unable to load student reports.");
@@ -940,7 +947,7 @@ function AssessmentRow({
 function FileRow({
   file,
 }: {
-  file: AdminStudentFile;
+  file: DailySubmissionFile;
 }) {
   return (
     <tr

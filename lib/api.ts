@@ -2126,23 +2126,106 @@ export type DailySubmissionFile = {
   createdAt: string;
 };
 
-export type DailySubmissionDay = {
-  id: string | null; // null until the student first saves something
-  learningPlanId: string;
-  forDate: string; // YYYY-MM-DD
-  status: "not_started" | "draft" | "submitted";
-  summaryNote: string | null;
-  submittedAt: string | null;
-  topics: DailySubmissionTopic[];
-  files: DailySubmissionFile[];
-};
-
 export type ListDailySubmissionsQuery = {
   learningPlanId?: string;
   topicId?: string;
   from?: string; // YYYY-MM-DD
   to?: string;
 };
+
+/* ============================================================
+   Paste into lib/api.ts
+   ============================================================ */
+
+// CHANGED — DailySubmissionDay now has a second file array for admin-
+// attached feedback/report files, kept separate from the student's own
+// uploads. Replace the existing DailySubmissionDay type with this one.
+export type AdminDailySubmissionFile = {
+  id: string;
+  fileUrl: string;
+  fileKey: string | null;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number | null;
+  createdAt: string;
+};
+
+export type DailySubmissionDay = {
+  id: string | null;
+  learningPlanId: string;
+  forDate: string;
+  status: "not_started" | "draft" | "submitted";
+  summaryNote: string | null;
+  submittedAt: string | null;
+  topics: DailySubmissionTopic[];
+  files: DailySubmissionFile[]; // the student's own uploads
+  adminFiles: AdminDailySubmissionFile[]; // NEW — admin's report/feedback files
+};
+
+/** Admin's own presigned-upload endpoint (separate from the student one —
+ *  different auth role, and your backend fixes a different folder server-side). */
+export async function getAdminPresignedUploadUrl(
+  fileName: string,
+  contentType: string,
+  folder?: "articles" | "interactive-elements" | "resources" | "misc"
+) {
+  return api<{ uploadUrl: string; publicUrl: string; key: string }>(
+    "/api/admin/files/presigned-upload-url",
+    {
+      method: "POST",
+      body: { fileName, contentType, folder },
+      skipAuthRedirect: false,
+    }
+  );
+}
+
+/** Attach a feedback/report file (already uploaded) to a student's day. */
+export async function addAdminDailySubmissionFile(
+  studentId: string,
+  learningPlanId: string,
+  date: string,
+  file: {
+    fileUrl: string;
+    fileKey?: string;
+    fileName: string;
+    contentType?: string;
+    sizeBytes?: number;
+  }
+) {
+  return api<DailySubmissionDay>(
+    `/api/admin/students/${studentId}/daily-submissions/${learningPlanId}/${date}/admin-files`,
+    { method: "POST", body: file, skipAuthRedirect: false }
+  );
+}
+
+/** Convenience: upload a real File end-to-end as admin, then attach it to the day. */
+export async function uploadAndAttachAdminDailyFile(
+  studentId: string,
+  learningPlanId: string,
+  date: string,
+  file: File
+) {
+  const { uploadUrl, publicUrl, key } = await getAdminPresignedUploadUrl(
+    file.name,
+    file.type || "application/octet-stream",
+    "misc"
+  );
+
+  const put = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  if (!put.ok) throw new Error("Failed to upload file to storage");
+
+  return addAdminDailySubmissionFile(studentId, learningPlanId, date, {
+    fileUrl: publicUrl,
+    fileKey: key,
+    fileName: file.name,
+    contentType: file.type || "application/octet-stream",
+    sizeBytes: file.size,
+  });
+}
 
 function dailySubmissionsQuery(q: ListDailySubmissionsQuery = {}): string {
   const p = new URLSearchParams();
@@ -2472,3 +2555,4 @@ export async function updateAdminStudentProgrammePlan(
     { method: "PATCH", body, skipAuthRedirect: false }
   );
 }
+
