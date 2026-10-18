@@ -6,10 +6,12 @@ import Link from "next/link";
 import {
   getCurrentSession,
   getStudentSession,
+  getStudentDailySubmissionDay,
   completeSession,
   submitInteraction,
   uploadSessionSummary,
   ApiError,
+  type AdminDailySubmissionFile,
 } from "@/lib/api";
 import type {
   CurrentSessionResponse,
@@ -34,6 +36,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SummaryFormatButton } from "@/components/learning/SummaryFormatButton";
+import { AdminReportCard } from "@/components/admin/AdminReportCard"; 
 
 type SummarySection = { header: string; body: string };
 
@@ -83,6 +86,8 @@ export default function StudentSessionPage() {
   const [summaryFileName, setSummaryFileName] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const [adminFiles, setAdminFiles] = useState<AdminDailySubmissionFile[]>([]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -147,6 +152,15 @@ export default function StudentSessionPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!data) return;
+
+    getStudentDailySubmissionDay(data.learningPlanId, data.session.scheduledDate)
+      .then((day) => setAdminFiles(day.adminFiles ?? []))
+      .catch(() => setAdminFiles([]));
+
+  }, [data]);
 
   const resources = useMemo(() => {
     if (!data) return [] as Resource[];
@@ -552,6 +566,8 @@ async function handleSubmit(elementId: string, payload: InteractionAnswer) {
               </section>
             )}
 
+            <AdminReportCard files={adminFiles} />
+            
             {isReviewMode ? (
               <div className="pt-2 text-center">
                 <Link
@@ -603,6 +619,7 @@ async function handleSubmit(elementId: string, payload: InteractionAnswer) {
           </div>
         </div>
       </main>
+      
     </Shell>
   );
 }

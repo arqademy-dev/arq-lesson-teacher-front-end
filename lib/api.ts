@@ -2262,6 +2262,12 @@ export async function saveDailySummaryNote(
   );
 }
 
+export async function getStudentDailySubmissionDay(learningPlanId: string, date: string) {
+  return api<DailySubmissionDay>(
+    `/api/students/me/daily-submissions/${learningPlanId}/${date}`
+  );
+}
+
 // Attach files already uploaded via your existing presigned-upload endpoints
 // (getStudentPresignedUploadUrl / getStudentBatchPresignedUploadUrls). This
 // only records the resulting URL against the day — it does not upload anything itself.
