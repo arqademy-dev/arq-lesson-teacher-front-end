@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InteractionRenderer } from "../interactions/InteractionRenderer";
-import { CheckCircle2, Maximize2, Minimize2, RotateCcw } from "lucide-react";
+import { CheckCircle2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  ALLOW_FORWARD_SEEK,
   extractYouTubeId,
   loadYouTubeApi,
   toggleFullscreen,
   YT_STATE_ENDED,
   type YTPlayer,
 } from "./Youtube";
+import { YouTubeShell } from "./YouTubeShell";
 import type {
   SafeInteractiveElement,
   InteractionAnswer,
@@ -59,11 +61,15 @@ export function InteractiveVideoPlayer({
   const playerRef = useRef<YTPlayer | null>(null);
   const pollRef = useRef<number | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
+  const maxWatchedRef = useRef(0);
 
   const handledKeyRef = useRef<string | null>(null); // never reset on popup close
   const pollPausedUntilRef = useRef(0);
 
   const [ready, setReady] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [activeElementId, setActiveElementId] = useState<string | null>(null);
   const [baselineKey, setBaselineKey] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
@@ -100,22 +106,28 @@ export function InteractiveVideoPlayer({
     if (!videoId) return;
     let cancelled = false;
     setEnded(false);
+    setReady(false);
+    maxWatchedRef.current = 0;
 
     loadYouTubeApi().then(() => {
       if (cancelled || !window.YT) return;
       playerRef.current = new window.YT.Player(containerId, {
         videoId,
         playerVars: {
+          controls: 0, // removes YouTube's bar, logo and "Watch on YouTube"
+          disablekb: 1,
+          fs: 0, // we provide our own fullscreen button
           rel: 0,
           modestbranding: 1,
-          fs: 0, // we provide our own fullscreen button
-          disablekb: 1,
           iv_load_policy: 3,
-          controls: 1,
+          playsinline: 1,
         },
         events: {
           onReady: () => setReady(true),
-          onStateChange: (e) => setEnded(e.data === YT_STATE_ENDED),
+          onStateChange: (e) => {
+            setPlaying(e.data === 1 || e.data === 3);
+            setEnded(e.data === YT_STATE_ENDED);
+          },
         },
       });
     });
@@ -140,6 +152,26 @@ export function InteractiveVideoPlayer({
     document.addEventListener("fullscreenchange", onFsChange);
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
+
+  // ── Progress + forward-seek guard ─────────────────────────────
+  useEffect(() => {
+    if (!ready) return;
+    const id = window.setInterval(() => {
+      const p = playerRef.current;
+      if (!p) return;
+      const t = p.getCurrentTime();
+      setDuration(p.getDuration() || 0);
+
+      if (!ALLOW_FORWARD_SEEK && t > maxWatchedRef.current + 1.5) {
+        p.seekTo(maxWatchedRef.current, true); // snap back
+        setCurrent(maxWatchedRef.current);
+        return;
+      }
+      maxWatchedRef.current = Math.max(maxWatchedRef.current, t);
+      setCurrent(t);
+    }, 300);
+    return () => window.clearInterval(id);
+  }, [ready]);
 
   // ── Checkpoint polling ────────────────────────────────────────
   useEffect(() => {
@@ -201,6 +233,22 @@ export function InteractiveVideoPlayer({
     }
   }, [results, activeElementId, checkpoints, baselineKey]);
 
+  function handleTogglePlay() {
+    const p = playerRef.current;
+    if (!p || !ready || activeElementId) return; // no play/pause while a question is open
+    if (playing) p.pauseVideo();
+    else p.playVideo();
+  }
+
+  function handleSeek(value: number) {
+    if (activeElementId) return;
+    const target = ALLOW_FORWARD_SEEK
+      ? value
+      : Math.min(value, maxWatchedRef.current);
+    playerRef.current?.seekTo(target, true);
+    setCurrent(target);
+  }
+
   const activeElement = checkpoints.find((e) => e.id === activeElementId);
   const activeResult = activeElement ? results[activeElement.id] : undefined;
   // Hide the stale result so the reopened popup is clean and submittable.
@@ -227,31 +275,26 @@ export function InteractiveVideoPlayer({
         )}
       >
         {videoId ? (
-          <div id={containerId} className="absolute inset-0 w-full h-full" />
+          <YouTubeShell
+            containerId={containerId}
+            ready={ready}
+            playing={playing}
+            current={current}
+            duration={duration}
+            isFullscreen={isFullscreen}
+            onTogglePlay={handleTogglePlay}
+            onSeek={handleSeek}
+            onFullscreen={() => toggleFullscreen(wrapperRef.current)}
+          />
         ) : (
-          <div className="absolute inset-0 grid place-items-center text-[13px] text-white/50 font-semibold px-4 text-center">
+          <div className="absolute inset-0 grid place-items-center px-4 text-center text-[13px] font-semibold text-white/50">
             No video URL for this resource yet.
           </div>
         )}
 
-        {videoId && (
-          <button
-            type="button"
-            onClick={() => toggleFullscreen(wrapperRef.current)}
-            className="absolute top-2 right-2 z-20 w-9 h-9 rounded-full bg-black/50 hover:bg-black/70 text-white grid place-items-center backdrop-blur-sm"
-            title={isFullscreen ? "Exit full screen" : "Full screen"}
-          >
-            {isFullscreen ? (
-              <Minimize2 className="w-4 h-4" />
-            ) : (
-              <Maximize2 className="w-4 h-4" />
-            )}
-          </button>
-        )}
-
         {/* End-of-video cover (hides YouTube suggestions) */}
         {ended && !activeElement && (
-          <div className="absolute inset-0 z-10 bg-[var(--navy)] flex flex-col items-center justify-center gap-3">
+          <div className="absolute inset-0 z-30 bg-[var(--navy)] flex flex-col items-center justify-center gap-3">
             <CheckCircle2 className="w-10 h-10 text-[var(--ok)]" />
             <p className="text-[13px] font-bold text-white">Video finished</p>
             <button

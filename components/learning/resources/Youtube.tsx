@@ -1,21 +1,27 @@
 /**
  * Shared YouTube IFrame Player API glue — types, script loading, and small
  * helpers used by both video players (Interactivevideoplayer.tsx and
- * SimpleYouTubePlayer.tsx).
+ * SimpleYouTubePlayer.tsx) and the shared YouTubeShell.
  *
  * This must be the ONLY place that declares `Window.YT`. TypeScript
  * requires every declaration of the same global property to match by
- * exact type identity — a second copy elsewhere, even structurally
- * identical, breaks the build with "Subsequent property declarations
- * must have the same type." Both player files import from here instead
- * of redeclaring it themselves.
+ * exact type identity, so the players import from here instead of
+ * redeclaring it.
  */
+
+/**
+ * ✅ EDIT THIS: set to true to let students skip ahead in videos.
+ * false = students can rewind/replay, but cannot jump past the furthest
+ * point they have already watched.
+ */
+export const ALLOW_FORWARD_SEEK = true;
 
 export type YTPlayer = {
   playVideo: () => void;
   pauseVideo: () => void;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
   getCurrentTime: () => number;
+  getDuration: () => number;
   destroy: () => void;
 };
 
@@ -75,12 +81,16 @@ export function extractYouTubeId(url: string): string | null {
   return null;
 }
 
+export function formatTime(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds || 0));
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, "0")}`;
+}
+
 /**
  * Fullscreen works reliably for arbitrary elements on desktop and Android
  * Chrome. iOS Safari largely restricts the Fullscreen API to actual
- * <video> elements, so on iPhone this may silently no-op — YouTube's own
- * in-player fullscreen control (still enabled, fs isn't set to 0) remains
- * the working fallback there.
+ * <video> elements, so on iPhone this may silently no-op.
  */
 export function toggleFullscreen(el: HTMLElement | null) {
   if (!el) return;

@@ -1,54 +1,69 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Maximize2, Minimize2, RotateCcw } from "lucide-react";
+import { CheckCircle2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  ALLOW_FORWARD_SEEK,
   extractYouTubeId,
   loadYouTubeApi,
   toggleFullscreen,
   YT_STATE_ENDED,
   type YTPlayer,
 } from "./Youtube";
+import { YouTubeShell } from "./YouTubeShell";
 
 type Props = {
   videoUrl: string;
+  /** Defaults to the global ALLOW_FORWARD_SEEK setting in Youtube.ts. */
+  allowForwardSeek?: boolean;
 };
 
-/**
- * Plain YouTube playback — no interactive checkpoints. Still drives the
- * real IFrame Player API (not a bare <iframe src>) so we can cover the
- * end-of-video "suggested videos" grid and offer a real fullscreen toggle,
- * same as the checkpoint player.
- */
-export function SimpleYouTubePlayer({ videoUrl }: Props) {
+export function SimpleYouTubePlayer({
+  videoUrl,
+  allowForwardSeek = ALLOW_FORWARD_SEEK,
+}: Props) {
   const containerId = useRef(
     `yt-simple-${Math.random().toString(36).slice(2)}`
   ).current;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
+  const maxWatchedRef = useRef(0);
   const videoId = useMemo(() => extractYouTubeId(videoUrl), [videoUrl]);
 
+  const [ready, setReady] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const [ended, setEnded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   useEffect(() => {
     if (!videoId) return;
     let cancelled = false;
     setEnded(false);
+    setReady(false);
+    maxWatchedRef.current = 0;
 
     loadYouTubeApi().then(() => {
       if (cancelled || !window.YT) return;
       playerRef.current = new window.YT.Player(containerId, {
-          videoId,
-          playerVars: {
+        videoId,
+        playerVars: {
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
           rel: 0,
           modestbranding: 1,
-          fs: 0,               // disable YouTube fullscreen
           iv_load_policy: 3,
+          playsinline: 1,
         },
         events: {
-          onStateChange: (e) => setEnded(e.data === YT_STATE_ENDED),
+          onReady: () => setReady(true),
+          onStateChange: (e) => {
+            setPlaying(e.data === 1 || e.data === 3);
+            setEnded(e.data === YT_STATE_ENDED);
+          },
         },
       });
     });
@@ -68,6 +83,41 @@ export function SimpleYouTubePlayer({ videoUrl }: Props) {
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, []);
 
+  // Progress + forward-seek guard
+  useEffect(() => {
+    if (!ready) return;
+    const id = window.setInterval(() => {
+      const p = playerRef.current;
+      if (!p) return;
+      const t = p.getCurrentTime();
+      setDuration(p.getDuration() || 0);
+
+      if (!allowForwardSeek && t > maxWatchedRef.current + 1.5) {
+        p.seekTo(maxWatchedRef.current, true); // snap back
+        setCurrent(maxWatchedRef.current);
+        return;
+      }
+      maxWatchedRef.current = Math.max(maxWatchedRef.current, t);
+      setCurrent(t);
+    }, 300);
+    return () => window.clearInterval(id);
+  }, [ready, allowForwardSeek]);
+
+  function togglePlay() {
+    const p = playerRef.current;
+    if (!p || !ready) return;
+    if (playing) p.pauseVideo();
+    else p.playVideo();
+  }
+
+  function handleSeek(value: number) {
+    const target = allowForwardSeek
+      ? value
+      : Math.min(value, maxWatchedRef.current);
+    playerRef.current?.seekTo(target, true);
+    setCurrent(target);
+  }
+
   return (
     <div
       ref={wrapperRef}
@@ -79,42 +129,38 @@ export function SimpleYouTubePlayer({ videoUrl }: Props) {
       )}
     >
       {videoId ? (
-        <div id={containerId} className="absolute inset-0 w-full h-full" />
+        <YouTubeShell
+          containerId={containerId}
+          ready={ready}
+          playing={playing}
+          current={current}
+          duration={duration}
+          isFullscreen={isFullscreen}
+          onTogglePlay={togglePlay}
+          onSeek={handleSeek}
+          onFullscreen={() => toggleFullscreen(wrapperRef.current)}
+        />
       ) : (
-        <div className="absolute inset-0 grid place-items-center text-[13px] text-white/50 font-semibold px-4 text-center">
+        <div className="absolute inset-0 grid place-items-center px-4 text-center text-[13px] font-semibold text-white/50">
           No video URL for this resource yet.
         </div>
       )}
 
-      {videoId && (
-        <button
-          type="button"
-          onClick={() => toggleFullscreen(wrapperRef.current)}
-          className="absolute top-2 right-2 z-20 w-9 h-9 rounded-full bg-black/50 hover:bg-black/70 text-white grid place-items-center backdrop-blur-sm"
-          title={isFullscreen ? "Exit full screen" : "Full screen"}
-        >
-          {isFullscreen ? (
-            <Minimize2 className="w-4 h-4" />
-          ) : (
-            <Maximize2 className="w-4 h-4" />
-          )}
-        </button>
-      )}
-
       {ended && (
-        <div className="absolute inset-0 z-10 bg-[var(--navy)] flex flex-col items-center justify-center gap-3">
-          <CheckCircle2 className="w-10 h-10 text-[var(--ok)]" />
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-[var(--navy)]">
+          <CheckCircle2 className="h-10 w-10 text-[var(--ok)]" />
           <p className="text-[13px] font-bold text-white">Video finished</p>
           <button
             type="button"
             onClick={() => {
               setEnded(false);
+              maxWatchedRef.current = 0;
               playerRef.current?.seekTo(0, true);
               playerRef.current?.playVideo();
             }}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[8px] text-[12px] font-bold bg-white/15 hover:bg-white/25 text-white"
+            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] bg-white/15 px-3 text-[12px] font-bold text-white hover:bg-white/25"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="h-3.5 w-3.5" />
             Watch again
           </button>
         </div>
