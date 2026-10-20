@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -259,6 +260,62 @@ export function InteractiveVideoPlayer({
       ? activeResult
       : undefined;
 
+  const popup = activeElement ? (
+  <div
+    className={cn(
+      isFullscreen ? "absolute" : "fixed",
+      "inset-0 z-[100] overflow-y-auto bg-black/85 p-4 backdrop-blur-sm sm:p-8"
+    )}
+  >
+    <div className="flex min-h-full items-center justify-center">
+      <div className="w-full max-w-2xl rounded-[14px] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-xl sm:p-8">
+        <InteractionRenderer
+          key={`${activeElement.id}:${baselineKey}`}
+          element={activeElement}
+          result={freshResult}
+          initialAnswer={null}
+          allowRetry={false}
+          submitting={submittingId === activeElement.id}
+          onSubmit={(answer) => {
+            // normalise fill_blank just in case
+            if (
+              activeElement.interactionType === "fill_blank" &&
+              answer &&
+              typeof answer === "object"
+            ) {
+              const keys = Object.keys(answer as Record<string, unknown>);
+              if (keys.length === 1) {
+                const value = String(
+                  (answer as Record<string, unknown>)[keys[0]] ?? ""
+                );
+                onSubmitElement(activeElement.id, {
+                  ...(answer as Record<string, unknown>),
+                  answerText: value,
+                } as InteractionAnswer);
+                return;
+              }
+            }
+            onSubmitElement(activeElement.id, answer);
+          }}
+        />
+
+        {freshResult && (
+          <p
+            className={cn(
+              "mt-3 text-center text-[13px] font-bold",
+              freshResult.isCorrect
+                ? "text-[var(--ok)]"
+                : "text-[var(--danger)]"
+            )}
+          >
+            {freshResult.isCorrect ? "Correct" : "Try again"}
+          </p>
+        )}
+      </div>
+    </div>
+  </div>
+) : null;
+
   return (
     <div className="space-y-3">
       <h2 className="font-heading text-[16px] font-semibold text-[var(--ink)]">
@@ -271,7 +328,7 @@ export function InteractiveVideoPlayer({
           "relative w-full overflow-hidden border border-[var(--line)] bg-[var(--navy)]",
           isFullscreen
             ? "h-screen w-screen rounded-none"
-            : "aspect-video rounded-[12px]"
+            : "aspect-[16/10] rounded-[12px]"
         )}
       >
         {videoId ? (
@@ -313,54 +370,8 @@ export function InteractiveVideoPlayer({
         )}
 
         {/* Checkpoint popup */}
-        {activeElement && (
-          <div className="absolute inset-0 z-30 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8 overflow-y-auto">
-            <div className="w-full max-w-lg rounded-[14px] bg-[var(--surface)] border border-[var(--line)] shadow-xl p-5">
-              <InteractionRenderer
-                key={`${activeElement.id}:${baselineKey}`}
-                element={activeElement}
-                result={freshResult}
-                initialAnswer={null}
-                allowRetry={false}
-                submitting={submittingId === activeElement.id}
-                onSubmit={(answer) => {
-                  // normalise fill_blank just in case
-                  if (
-                    activeElement.interactionType === "fill_blank" &&
-                    answer &&
-                    typeof answer === "object"
-                  ) {
-                    const keys = Object.keys(answer as Record<string, unknown>);
-                    if (keys.length === 1) {
-                      const value = String(
-                        (answer as Record<string, unknown>)[keys[0]] ?? ""
-                      );
-                      onSubmitElement(activeElement.id, {
-                        ...(answer as Record<string, unknown>),
-                        answerText: value,
-                      } as InteractionAnswer);
-                      return;
-                    }
-                  }
-                  onSubmitElement(activeElement.id, answer);
-                }}
-              />
+        {popup && (isFullscreen ? popup : createPortal(popup, document.body))}
 
-              {freshResult && (
-                <p
-                  className={cn(
-                    "mt-3 text-[13px] font-bold text-center",
-                    freshResult.isCorrect
-                      ? "text-[var(--ok)]"
-                      : "text-[var(--danger)]"
-                  )}
-                >
-                  {freshResult.isCorrect ? "Correct" : "Try again"}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {checkpoints.length > 0 && (
