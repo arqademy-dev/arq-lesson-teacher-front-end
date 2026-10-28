@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-[392px]">
         <div className="font-heading font-semibold text-white text-[28px] leading-none tracking-[-0.02em]">
-          AR<span className="text-[#12BFB4]">Qacademy</span>
+          AR<span className="text-[#12BFB4]">qademy</span>
         </div>
 
         <h2 className="mt-8 font-heading font-semibold text-[23px] text-white">

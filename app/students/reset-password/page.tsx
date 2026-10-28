@@ -69,7 +69,7 @@ function ResetPasswordInner() {
     <div className="relative min-h-screen w-full grid place-items-center px-6 py-12 bg-[radial-gradient(1200px_800px_at_20%_20%,#14294F_0%,#0D1B3D_45%,#070F26_100%)]">
       <div className="w-full max-w-[392px]">
         <div className="font-heading font-semibold text-white text-[28px] leading-none tracking-[-0.02em]">
-          AR<span className="text-[#12BFB4]">Qacademy</span>
+          AR<span className="text-[#12BFB4]">qademy</span>
         </div>
 
         {status === "checking" && (

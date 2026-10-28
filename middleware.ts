@@ -7,7 +7,11 @@ const AUTH_COOKIE = "token";
 const PUBLIC_PATHS: Record<string, string[]> = {
   "/admin": ["/admin/login"],
   "/educators": ["/educators/login", "/educators/register"],
-  "/students": ["/students/login"],
+  "/students": [
+    "/students/login",
+    "/students/forgot-password",
+    "/students/reset-password",
+  ],
 };
 
 function loginPathFor(pathname: string): string | null {

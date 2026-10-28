@@ -161,11 +161,16 @@ export default function StudentLoginPage() {
               </p>
             )}
           </div>
-          <div className="mt-2 text-right">
-            <Link href="/students/forgot-password" className="text-[12px] font-semibold text-[#12BFB4] hover:underline">
-              Forgot password?
-            </Link>
-          </div>
+          <div className="mt-2.5 text-right">
+          <Link
+            href="/students/forgot-password"
+            className="inline-block text-[12.5px] font-semibold hover:underline underline-offset-4"
+            style={{ color: "#FFFFFF" }}
+          >
+            Forgot{" "}
+            <span style={{ color: "#12BFB4" }}>password?</span>
+          </Link>
+        </div>
 
           {serverError && (
             <div className="mt-4 px-3.5 py-2.5 rounded-[9px] bg-red-500/15 border border-red-400/25 text-[12.5px] text-red-200 font-semibold">
