@@ -2562,3 +2562,17 @@ export async function updateAdminStudentProgrammePlan(
   );
 }
 
+export const requestStudentPasswordReset = (email: string) =>
+  api<{ message: string }>("/api/students/forgot-password", { method: "POST", body: { email }, skipAuthRedirect: true });
+
+export const verifyStudentResetToken = (token: string) =>
+  api<{ email: string }>(`/api/students/reset-password/verify?token=${encodeURIComponent(token)}`, { skipAuthRedirect: true });
+
+export const resetStudentPassword = (token: string, password: string) =>
+  api<{ message: string }>("/api/students/reset-password", { method: "POST", body: { token, password }, skipAuthRedirect: true });
+
+export const sendStudentPasswordOtp = () =>
+  api<{ sentTo: string; expiresInMinutes: number }>("/api/students/me/password-otp", { method: "POST" });
+
+export const confirmStudentPasswordOtp = (otp: string, password: string) =>
+  api<{ message: string }>("/api/students/me/password-otp/confirm", { method: "POST", body: { otp, password } });

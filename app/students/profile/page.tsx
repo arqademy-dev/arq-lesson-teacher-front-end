@@ -14,6 +14,7 @@ import {
   User,
   LogOut,
 } from "lucide-react";
+import { ChangePasswordCard } from "@/components/students/ChangePasswordCard";
 
 type StudentMe = {
   firstName?: string;
@@ -150,6 +151,8 @@ export default function StudentProfilePage() {
                 sub="Weeks, sessions, continue learning"
               />
             </section>
+
+            <ChangePasswordCard />
 
             <div className="mt-8">
               <Link

@@ -1,6 +1,6 @@
-import { createPortal } from "react-dom";
 "use client";
 
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InteractionRenderer } from "../interactions/InteractionRenderer";
 import { CheckCircle2, RotateCcw } from "lucide-react";
